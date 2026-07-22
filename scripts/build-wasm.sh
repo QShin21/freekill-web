@@ -95,7 +95,9 @@ if [[ ! -f "${lua_prefix}/lib/liblua.a" ]]; then
     CC=emcc AR="emar rcu" RANLIB=emranlib \
     MYCFLAGS="-O3 -fPIC" generic
   mkdir -p "${lua_prefix}/include" "${lua_prefix}/lib"
-  cp "${deps_root}/src/lua-${lua_version}/src/"*.h "${lua_prefix}/include/"
+  cp "${deps_root}/src/lua-${lua_version}/src/"*.h \
+    "${deps_root}/src/lua-${lua_version}/src/"*.hpp \
+    "${lua_prefix}/include/"
   cp "${deps_root}/src/lua-${lua_version}/src/liblua.a" "${lua_prefix}/lib/"
 fi
 
