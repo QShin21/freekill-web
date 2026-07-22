@@ -106,6 +106,12 @@ async function patchRootCMake(freeKill) {
       "if (EMSCRIPTEN)\n  find_package(OpenSSL REQUIRED)\n  find_package(Lua REQUIRED)\n  find_package(SQLite3 REQUIRED)\nelse()\n  find_package(OpenSSL)\n  find_package(Lua)\n  find_package(SQLite3)\nendif()\n",
       "Wasm native dependencies",
     );
+    output = replaceOnce(
+      output,
+      "include_directories(include/libgit2)\n",
+      "include_directories(include/libgit2)\n\nif (EMSCRIPTEN)\n  include_directories(${LUA_INCLUDE_DIR})\nendif()\n",
+      "Wasm Lua headers",
+    );
     return output;
   });
 }
