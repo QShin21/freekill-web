@@ -353,6 +353,18 @@ async function patchPch(freeKill) {
   );
 }
 
+async function patchClientSocket(freeKill) {
+  await transform(join(freeKill, "src", "network", "client_socket.cpp"), (source) =>
+    replaceAllChecked(
+      source,
+      "*error = QCborError::",
+      "error->c = QCborError::",
+      3,
+      "Qt 6.8 QCborError assignments",
+    ),
+  );
+}
+
 async function main() {
   const options = argumentsFrom(process.argv.slice(2));
   await assertHead(options.freeKill, expectedFreeKill, "FreeKill");
@@ -372,6 +384,7 @@ async function main() {
   await patchUtilities(options.freeKill);
   await patchQmlBackend(options.freeKill);
   await patchPch(options.freeKill);
+  await patchClientSocket(options.freeKill);
 
   await writeFile(
     join(options.freeKill, "freekill-web-build.json"),
