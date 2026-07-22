@@ -127,7 +127,7 @@ if [[ ! -f "${openssl_prefix}/lib/libcrypto.a" ]]; then
     no-shared no-asm no-tests no-threads no-dso no-ui-console no-afalgeng \
     --prefix="${openssl_prefix}" --openssldir="${openssl_prefix}/ssl" --libdir=lib
   emmake make -j"${BUILD_JOBS:-4}" build_libs
-  emmake make install_sw
+  emmake make install_dev
   popd >/dev/null
 fi
 
