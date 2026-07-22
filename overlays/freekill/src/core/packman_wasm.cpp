@@ -10,7 +10,7 @@ PackMan *Pacman = nullptr;
 namespace {
 
 QString sqlQuoted(QString value) {
-  return value.replace(''', "''");
+  return value.replace('\'', "''");
 }
 
 } // namespace
