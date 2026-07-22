@@ -19,7 +19,7 @@ openssl_version="3.3.4"
 : "${QT_WASM_ROOT:?Set QT_WASM_ROOT to the Qt 6.8 multi-threaded WebAssembly kit}"
 : "${QT_HOST_PATH:?Set QT_HOST_PATH to the matching Qt 6.8 desktop host kit}"
 
-for command in git node cmake ninja emcc emar emran emmake make perl curl tar unzip; do
+for command in git node cmake ninja emcc emar emranlib emmake make perl curl tar unzip; do
   if ! command -v "${command}" >/dev/null 2>&1; then
     echo "Missing required command: ${command}" >&2
     exit 1
@@ -92,7 +92,7 @@ if [[ ! -f "${lua_prefix}/lib/liblua.a" ]]; then
   download "https://www.lua.org/ftp/lua-${lua_version}.tar.gz" "${lua_archive}"
   tar -xf "${lua_archive}" -C "${deps_root}/src"
   emmake make -C "${deps_root}/src/lua-${lua_version}/src" \
-    CC=emcc AR="emar rcu" RANLIB=emran \
+    CC=emcc AR="emar rcu" RANLIB=emranlib \
     MYCFLAGS="-O3 -fPIC" generic
   mkdir -p "${lua_prefix}/include" "${lua_prefix}/lib"
   cp "${deps_root}/src/lua-${lua_version}/src/"*.h "${lua_prefix}/include/"
@@ -123,7 +123,7 @@ if [[ ! -f "${openssl_prefix}/lib/libcrypto.a" ]]; then
     "${openssl_archive}"
   tar -xf "${openssl_archive}" -C "${deps_root}/src"
   pushd "${deps_root}/src/openssl-${openssl_version}" >/dev/null
-  CC=emcc AR=emar RANLIB=emran perl ./Configure linux-generic32 \
+  CC=emcc AR=emar RANLIB=emranlib perl ./Configure linux-generic32 \
     no-shared no-asm no-tests no-threads no-dso no-ui-console \
     --prefix="${openssl_prefix}" --openssldir="${openssl_prefix}/ssl" --libdir=lib
   emmake make -j"${BUILD_JOBS:-4}" build_libs
