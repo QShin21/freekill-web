@@ -8,6 +8,7 @@ deps_root="${build_root}/wasm-deps"
 free_kill_source="${source_root}/FreeKill"
 core_source="${source_root}/freekill-core"
 wasm_build="${build_root}/wasm"
+build_type="${BUILD_TYPE:-MinSizeRel}"
 
 free_kill_revision="37f8c1248d491f5fbc7a07f1bc53724191e44497"
 core_revision="c19441690711b73ffb427b3e7974ec7e92e33bea"
@@ -144,7 +145,7 @@ fi
   -S "${free_kill_source}" \
   -B "${wasm_build}" \
   -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_BUILD_TYPE="${build_type}" \
   -DQT_HOST_PATH="${QT_HOST_PATH}" \
   -DLUA_INCLUDE_DIR="${lua_prefix}/include" \
   -DLUA_LIBRARY="${lua_prefix}/lib/liblua.a" \
