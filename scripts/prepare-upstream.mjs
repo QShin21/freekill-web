@@ -235,6 +235,12 @@ async function patchUtilities(freeKill) {
     );
     output = replaceOnce(
       output,
+      "#include <git2.h>\n",
+      "#ifndef Q_OS_WASM\n#include <git2.h>\n#endif\n",
+      "browser libgit2 exclusion",
+    );
+    output = replaceOnce(
+      output,
       "QString GetDeviceUuid() {\n  QString ret;\n#ifdef Q_OS_ANDROID",
       "QString GetDeviceUuid() {\n  QString ret;\n#ifdef Q_OS_WASM\n  ret = WebPlatform::deviceUuid();\n#elif defined(Q_OS_ANDROID)",
       "persistent browser device id",
