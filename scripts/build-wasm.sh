@@ -124,7 +124,7 @@ if [[ ! -f "${openssl_prefix}/lib/libcrypto.a" ]]; then
   tar -xf "${openssl_archive}" -C "${deps_root}/src"
   pushd "${deps_root}/src/openssl-${openssl_version}" >/dev/null
   CC=emcc AR=emar RANLIB=emranlib perl ./Configure linux-generic32 \
-    no-shared no-asm no-tests no-threads no-dso no-ui-console \
+    no-shared no-asm no-tests no-threads no-dso no-ui-console no-afalgeng \
     --prefix="${openssl_prefix}" --openssldir="${openssl_prefix}/ssl" --libdir=lib
   emmake make -j"${BUILD_JOBS:-4}" build_libs
   emmake make install_sw
