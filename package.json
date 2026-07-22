@@ -9,6 +9,6 @@
     "package:web": "node scripts/package-web.mjs"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=20.11"
   }
 }

@@ -1,0 +1,15 @@
+[Unit]
+Description=FreeKill game server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/freekill-asio-static
+ExecStart=%h/freekill-asio-static/freekill-asio -p 9527
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+[Install]
+WantedBy=default.target

@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Binary WebSocket to FreeKill TCP gateway",
   "engines": {
-    "node": ">=22"
+    "node": ">=20.11"
   },
   "scripts": {
     "start": "node src/index.mjs",

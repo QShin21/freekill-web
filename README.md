@@ -57,6 +57,7 @@ npm start
 | `PORT` | `9528` | 网关 HTTP/WebSocket 端口 |
 | `FREEKILL_HOST` | `127.0.0.1` | 现有游戏服务端地址 |
 | `FREEKILL_PORT` | `9527` | 现有游戏服务端 TCP 端口 |
+| `STATIC_ROOT` | 空 | 可选；设置后网关会同时提供该目录中的网页/Wasm 静态文件 |
 | `WS_PATH` | `/ws` | WebSocket 路径 |
 | `ALLOWED_ORIGINS` | 空（开发时允许全部） | 逗号分隔的网页 Origin；生产环境必须设置 |
 | `MAX_CONNECTIONS` | `2000` | 网页连接上限 |
@@ -122,6 +123,22 @@ docker compose up --build
 - 两类玩家处于同一个大厅和房间系统中。
 
 Linux 上如果 `freekill-asio` 也在 Docker 网络中，可把 `FREEKILL_HOST` 改为它的 Compose 服务名。生产环境应使用 HTTPS；HTTPS 页面只能连接 WSS，仓库中的同源 Nginx 配置会自动完成升级代理。
+
+## 不使用 Docker 的服务器部署
+
+网关也可以直接提供 `dist/`，适合已有 FreeKill 服务且暂时不能修改系统 Nginx 的服务器：
+
+```bash
+cd gateway
+npm ci --omit=dev
+HOST=0.0.0.0 PORT=9580 \
+STATIC_ROOT="$HOME/freekill-web/dist" \
+FREEKILL_HOST=127.0.0.1 FREEKILL_PORT=9527 \
+npm start
+```
+
+`deployment/systemd/` 提供游戏服务和网页网关的用户级 systemd 单元；
+`deployment/nginx-freekill.conf` 可在具备 root 权限后把现有 HTTPS 域名切换到网页网关。
 
 ## 缓存行为
 

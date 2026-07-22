@@ -65,7 +65,17 @@ if [[ -n "${EXTRA_PACKAGES_DIR:-}" ]]; then
     echo "EXTRA_PACKAGES_DIR does not exist: ${EXTRA_PACKAGES_DIR}" >&2
     exit 1
   fi
-  cp -R "${EXTRA_PACKAGES_DIR}/." "${free_kill_source}/packages/"
+  (cd "${EXTRA_PACKAGES_DIR}" && tar --exclude='.git' -cf - .) | \
+    (cd "${free_kill_source}/packages" && tar -xf -)
+  if [[ -d "${EXTRA_PACKAGES_DIR}/freekill-core" ]]; then
+    for core_directory in Fk lua; do
+      if [[ -d "${EXTRA_PACKAGES_DIR}/freekill-core/${core_directory}" ]]; then
+        rm -rf "${free_kill_source:?}/${core_directory}"
+        cp -R "${EXTRA_PACKAGES_DIR}/freekill-core/${core_directory}" \
+          "${free_kill_source}/${core_directory}"
+      fi
+    done
+  fi
 fi
 
 download() {
