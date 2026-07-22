@@ -93,7 +93,7 @@ if [[ ! -f "${lua_prefix}/lib/liblua.a" ]]; then
   tar -xf "${lua_archive}" -C "${deps_root}/src"
   emmake make -C "${deps_root}/src/lua-${lua_version}/src" \
     CC=emcc AR="emar rcu" RANLIB=emranlib \
-    MYCFLAGS="-O3 -fPIC" generic
+    MYCFLAGS="-O3 -fPIC -pthread" generic
   mkdir -p "${lua_prefix}/include" "${lua_prefix}/lib"
   cp "${deps_root}/src/lua-${lua_version}/src/"*.h \
     "${deps_root}/src/lua-${lua_version}/src/"*.hpp \
@@ -110,7 +110,7 @@ if [[ ! -f "${sqlite_prefix}/lib/libsqlite3.a" ]]; then
   unzip -q -o "${sqlite_archive}" -d "${deps_root}/src"
   sqlite_source="${deps_root}/src/sqlite-amalgamation-${sqlite_archive_version}"
   mkdir -p "${sqlite_prefix}/include" "${sqlite_prefix}/lib"
-  emcc -O3 -fPIC -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION \
+  emcc -O3 -fPIC -pthread -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION \
     -c "${sqlite_source}/sqlite3.c" -o "${sqlite_source}/sqlite3.o"
   emar rcs "${sqlite_prefix}/lib/libsqlite3.a" "${sqlite_source}/sqlite3.o"
   cp "${sqlite_source}/sqlite3.h" "${sqlite_source}/sqlite3ext.h" \
@@ -125,7 +125,8 @@ if [[ ! -f "${openssl_prefix}/lib/libcrypto.a" ]]; then
     "${openssl_archive}"
   tar -xf "${openssl_archive}" -C "${deps_root}/src"
   pushd "${deps_root}/src/openssl-${openssl_version}" >/dev/null
-  CC=emcc AR=emar RANLIB=emranlib perl ./Configure linux-generic32 \
+  CC=emcc AR=emar RANLIB=emranlib CFLAGS="-pthread" \
+    perl ./Configure linux-generic32 \
     no-shared no-asm no-tests no-threads no-dso no-ui-console no-afalgeng \
     --prefix="${openssl_prefix}" --openssldir="${openssl_prefix}/ssl" --libdir=lib
   emmake make -j"${BUILD_JOBS:-4}" build_libs

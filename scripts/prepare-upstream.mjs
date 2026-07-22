@@ -132,6 +132,12 @@ async function patchSourceCMake(freeKill) {
     );
     output = replaceOnce(
       output,
+      '  list(APPEND freekill_SRCS\n    "core/packman_wasm.cpp"\n',
+      '  list(APPEND freekill_SRCS\n    "core/packman.h"\n    "core/packman_wasm.cpp"\n',
+      "Wasm PackMan moc header",
+    );
+    output = replaceOnce(
+      output,
       "set(QT_LIB Qt6::Network)\n",
       "set(QT_LIB Qt6::Network)\nif (EMSCRIPTEN)\n  list(APPEND QT_LIB Qt6::WebSockets)\nendif()\n",
       "Qt WebSockets link library",
