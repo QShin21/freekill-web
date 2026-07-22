@@ -139,6 +139,7 @@ fi
   -DQT_HOST_PATH="${QT_HOST_PATH}" \
   -DLUA_INCLUDE_DIR="${lua_prefix}/include" \
   -DLUA_LIBRARY="${lua_prefix}/lib/liblua.a" \
+  -DLUA_LIBRARIES="${lua_prefix}/lib/liblua.a" \
   -DSQLite3_INCLUDE_DIR="${sqlite_prefix}/include" \
   -DSQLite3_LIBRARY="${sqlite_prefix}/lib/libsqlite3.a" \
   -DOPENSSL_ROOT_DIR="${openssl_prefix}" \
