@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#111827" />
+    <meta name="description" content="FreeKill 网页客户端" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>FreeKill Web</title>
+  </head>
+  <body>
+    <main id="app-shell">
+      <section id="loading" aria-live="polite">
+        <div class="brand" aria-hidden="true">杀</div>
+        <h1>FreeKill</h1>
+        <p id="loading-message">正在检查本地资源……</p>
+        <progress id="loading-progress" max="1" value="0"></progress>
+        <p id="loading-detail">首次游玩需要下载并缓存游戏资源，之后会快得多。</p>
+        <button id="retry" type="button" hidden>重试</button>
+      </section>
+      <div id="screen" aria-label="FreeKill 游戏画面"></div>
+    </main>
+    <noscript>FreeKill 网页版需要启用 JavaScript。</noscript>
+
+    <script src="qtloader.js"></script>
+    <script src="FreeKill.js"></script>
+    <script type="module" src="bootstrap.js"></script>
+  </body>
+</html>

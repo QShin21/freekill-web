@@ -1,0 +1,14 @@
+{
+  "name": "freekill-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm --prefix gateway test && npm run test:syntax",
+    "test:syntax": "node --check web/bootstrap.js && node --check web/service-worker.js && node --check scripts/package-web.mjs && node --check scripts/prepare-upstream.mjs",
+    "package:web": "node scripts/package-web.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

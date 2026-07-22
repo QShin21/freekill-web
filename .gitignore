@@ -1,0 +1,8 @@
+node_modules/
+gateway/node_modules/
+dist/
+build/
+.cache/
+*.log
+.env
+upstream/

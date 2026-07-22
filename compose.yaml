@@ -1,0 +1,24 @@
+services:
+  gateway:
+    build:
+      context: ./gateway
+    environment:
+      HOST: 0.0.0.0
+      PORT: 9528
+      FREEKILL_HOST: ${FREEKILL_HOST:-host.docker.internal}
+      FREEKILL_PORT: ${FREEKILL_PORT:-9527}
+      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost:8080}
+      MAX_CONNECTIONS: ${MAX_CONNECTIONS:-2000}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      dockerfile: deployment/web.Dockerfile
+    depends_on:
+      gateway:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    restart: unless-stopped

@@ -1,0 +1,9 @@
+{
+  "name": "FreeKill Web",
+  "short_name": "FreeKill",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#090d16",
+  "theme_color": "#111827",
+  "description": "FreeKill 网页客户端"
+}

@@ -1,0 +1,118 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  background: #090d16;
+  color: #f8fafc;
+}
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app-shell,
+#screen {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% 15%, rgb(128 48 48 / 28%), transparent 40%),
+    linear-gradient(145deg, #121827, #070a11 70%);
+}
+
+#screen {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+}
+
+body[data-state="ready"] #screen {
+  visibility: visible;
+}
+
+#loading {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.8rem;
+  padding: 2rem;
+  text-align: center;
+  transition: opacity 180ms ease;
+}
+
+body[data-state="ready"] #loading {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.brand {
+  display: grid;
+  width: 5rem;
+  height: 5rem;
+  place-items: center;
+  border: 1px solid rgb(251 191 36 / 45%);
+  border-radius: 1.2rem;
+  background: linear-gradient(145deg, #991b1b, #450a0a);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 45%);
+  color: #fef3c7;
+  font-family: STKaiti, KaiTi, serif;
+  font-size: 3rem;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  letter-spacing: 0.08em;
+}
+
+p {
+  max-width: 36rem;
+  margin: 0;
+  color: #cbd5e1;
+}
+
+#loading-detail {
+  min-height: 1.4em;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+progress {
+  width: min(30rem, 80vw);
+  height: 0.65rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #1e293b;
+}
+
+progress::-webkit-progress-bar {
+  background: #1e293b;
+}
+
+progress::-webkit-progress-value {
+  background: linear-gradient(90deg, #b91c1c, #f59e0b);
+}
+
+progress::-moz-progress-bar {
+  background: linear-gradient(90deg, #b91c1c, #f59e0b);
+}
+
+button {
+  margin-top: 0.5rem;
+  padding: 0.65rem 1.2rem;
+  border: 1px solid #f59e0b;
+  border-radius: 0.6rem;
+  background: #7f1d1d;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+}
