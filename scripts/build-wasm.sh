@@ -142,6 +142,8 @@ fi
   -DSQLite3_INCLUDE_DIR="${sqlite_prefix}/include" \
   -DSQLite3_LIBRARY="${sqlite_prefix}/lib/libsqlite3.a" \
   -DOPENSSL_ROOT_DIR="${openssl_prefix}" \
+  -DOPENSSL_INCLUDE_DIR="${openssl_prefix}/include" \
+  -DOPENSSL_CRYPTO_LIBRARY="${openssl_prefix}/lib/libcrypto.a" \
   -DOPENSSL_USE_STATIC_LIBS=TRUE
 
 cmake --build "${wasm_build}" --parallel "${BUILD_JOBS:-4}"
