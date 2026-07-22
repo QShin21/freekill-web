@@ -131,6 +131,12 @@ if [[ ! -f "${openssl_prefix}/lib/libcrypto.a" ]]; then
   popd >/dev/null
 fi
 
+emscripten_libc="$(emcc --print-file-name=libc.a)"
+if [[ ! -f "${emscripten_libc}" ]]; then
+  echo "Could not locate Emscripten libc.a: ${emscripten_libc}" >&2
+  exit 1
+fi
+
 "${QT_WASM_ROOT}/bin/qt-cmake" \
   -S "${free_kill_source}" \
   -B "${wasm_build}" \
@@ -140,6 +146,7 @@ fi
   -DLUA_INCLUDE_DIR="${lua_prefix}/include" \
   -DLUA_LIBRARY="${lua_prefix}/lib/liblua.a" \
   -DLUA_LIBRARIES="${lua_prefix}/lib/liblua.a" \
+  -DLUA_MATH_LIBRARY="${emscripten_libc}" \
   -DSQLite3_INCLUDE_DIR="${sqlite_prefix}/include" \
   -DSQLite3_LIBRARY="${sqlite_prefix}/lib/libsqlite3.a" \
   -DOPENSSL_ROOT_DIR="${openssl_prefix}" \
