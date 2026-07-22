@@ -11,7 +11,7 @@ EM_JS(char *, duplicateWebSocketUrl, (), {
   const config = globalThis.FREEKILL_WEB_CONFIG || {};
   const scheme = location.protocol === "https:" ? "wss:" : "ws:";
   const path = config.webSocketPath || "/ws";
-  const value = config.webSocketUrl || `${scheme}//${location.host}${path}`;
+  const value = config.webSocketUrl || scheme + "//" + location.host + path;
   const size = lengthBytesUTF8(value) + 1;
   const result = _malloc(size);
   stringToUTF8(value, result, size);
@@ -24,12 +24,16 @@ EM_JS(char *, duplicateDeviceUuid, (), {
   try {
     value = localStorage.getItem(key) || "";
     if (!value) {
-      value = globalThis.crypto?.randomUUID?.() ||
-        `web-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+      const browserCrypto = globalThis.crypto;
+      value = browserCrypto && typeof browserCrypto.randomUUID === "function" ?
+        browserCrypto.randomUUID() :
+        "web-" + Date.now().toString(16) + "-" +
+          Math.random().toString(16).slice(2);
       localStorage.setItem(key, value);
     }
   } catch (_) {
-    value = `web-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+    value = "web-" + Date.now().toString(16) + "-" +
+      Math.random().toString(16).slice(2);
   }
   const size = lengthBytesUTF8(value) + 1;
   const result = _malloc(size);
@@ -60,7 +64,7 @@ QString persistentPath(const QString &relativePath) {
 void syncPersistentFileSystem() {
   EM_ASM({
     if (typeof FS !== "undefined") {
-      FS.syncfs(false, (error) => {
+      FS.syncfs(false, function(error) {
         if (error) console.warn("Unable to persist FreeKill data", error);
       });
     }
