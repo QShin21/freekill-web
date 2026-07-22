@@ -365,6 +365,36 @@ async function patchClientSocket(freeKill) {
   );
 }
 
+async function patchSwigForWeb(freeKill) {
+  await transform(join(freeKill, "src", "swig", "naturalvar.i"), (source) => {
+    let output = replaceOnce(
+      source,
+      '#include "server/gamelogic/roomthread.h"\n',
+      "",
+      "browser server type include",
+    );
+    output = replaceOnce(
+      output,
+      "    } else if (typeId == QMetaType::fromType<RoomThread *>().id()) {\n" +
+        "      SWIG_NewPointerObj(L, v.value<RoomThread *>(), SWIGTYPE_p_RoomThread, 0);\n" +
+        "    } else if (typeId == QMetaType::fromType<Server *>().id()) {\n" +
+        "      SWIG_NewPointerObj(L, v.value<Server *>(), SWIGTYPE_p_Server, 0);\n",
+      "",
+      "browser server QVariant bindings",
+    );
+    return output;
+  });
+
+  await transform(join(freeKill, "src", "swig", "qt.i"), (source) =>
+    replaceOnce(
+      source,
+      "%template(SPlayerList) QList<ServerPlayer *>;\n",
+      "",
+      "browser server player list binding",
+    ),
+  );
+}
+
 async function main() {
   const options = argumentsFrom(process.argv.slice(2));
   await assertHead(options.freeKill, expectedFreeKill, "FreeKill");
@@ -385,6 +415,7 @@ async function main() {
   await patchQmlBackend(options.freeKill);
   await patchPch(options.freeKill);
   await patchClientSocket(options.freeKill);
+  await patchSwigForWeb(options.freeKill);
 
   await writeFile(
     join(options.freeKill, "freekill-web-build.json"),

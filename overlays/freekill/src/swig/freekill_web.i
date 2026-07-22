@@ -4,6 +4,7 @@
 
 %{
 #include "client/client.h"
+#include "core/player.h"
 #include "ui/qmlbackend.h"
 #include "core/util.h"
 
