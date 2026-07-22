@@ -133,7 +133,7 @@ if [[ ! -f "${openssl_prefix}/lib/libcrypto.a" ]]; then
   popd >/dev/null
 fi
 
-emscripten_libc="$(emcc --print-file-name=libc.a)"
+emscripten_libc="$(emcc --print-file-name=libc-mt.a)"
 if [[ ! -f "${emscripten_libc}" ]]; then
   echo "Could not locate Emscripten libc.a: ${emscripten_libc}" >&2
   exit 1
