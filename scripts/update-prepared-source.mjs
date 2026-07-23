@@ -28,6 +28,17 @@ const splitPreload = `  foreach(resource_dir IN ITEMS audio fonts image lua ltk 
     "SHELL:--preload-file \\"\${FK_WEB_PACKAGES_DIR}@/packages\\"")
 `;
 
+const legacySplitDirectories =
+  "  foreach(resource_dir IN ITEMS audio fonts image lua Fk client)";
+const splitDirectories =
+  "  foreach(resource_dir IN ITEMS audio fonts image lua ltk Fk LunarLtk client)";
+const legacyTrackedRuntimeDirectories = `    "\${PROJECT_SOURCE_DIR}/lua/*"
+    "\${PROJECT_SOURCE_DIR}/Fk/*"`;
+const trackedRuntimeDirectories = `    "\${PROJECT_SOURCE_DIR}/lua/*"
+    "\${PROJECT_SOURCE_DIR}/ltk/*"
+    "\${PROJECT_SOURCE_DIR}/Fk/*"
+    "\${PROJECT_SOURCE_DIR}/LunarLtk/*"`;
+
 const trackedPreloadDependencies = `  file(GLOB_RECURSE FK_WEB_PRELOAD_FILES CONFIGURE_DEPENDS
     LIST_DIRECTORIES false
     "\${PROJECT_SOURCE_DIR}/audio/*"
@@ -281,6 +292,12 @@ if (!after.includes("set(FK_WEB_PACKAGES_DIR")) {
     throw new Error(`Expected one legacy package preload block in ${cmakePath}, found ${count}`);
   }
   after = after.replace(oldPreload, splitPreload);
+}
+// Upgrade source trees prepared by an earlier web build as well as pristine
+// upstream trees. The server reuses this directory between incremental builds.
+after = after.replace(legacySplitDirectories, splitDirectories);
+if (after.includes("FK_WEB_PRELOAD_FILES")) {
+  after = after.replace(legacyTrackedRuntimeDirectories, trackedRuntimeDirectories);
 }
 if (!after.includes("FK_WEB_PRELOAD_FILES")) {
   const count = after.split(splitPreload).length - 1;

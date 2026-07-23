@@ -303,6 +303,23 @@ void startClient() {
     assert.match(migratedQmlBackendHeader, /configuredServerPort\(\) const/);
     assert.match(migratedQmlBackend, /WebPlatform::serverAddress\(\)/);
     assert.match(migratedQmlBackend, /WebPlatform::serverPort\(\)/);
+
+    const previousMigration = migrated
+      .replace(
+        "IN ITEMS audio fonts image lua ltk Fk LunarLtk client",
+        "IN ITEMS audio fonts image lua Fk client",
+      )
+      .replace('    "${PROJECT_SOURCE_DIR}/ltk/*"\n', "")
+      .replace('    "${PROJECT_SOURCE_DIR}/LunarLtk/*"\n', "");
+    await writeFile(cmakePath, previousMigration);
+    await exec(process.execPath, [script, "--free-kill", sourceDirectory]);
+    const upgradedMigration = await readFile(cmakePath, "utf8");
+    assert.match(
+      upgradedMigration,
+      /IN ITEMS audio fonts image lua ltk Fk LunarLtk client/,
+    );
+    assert.match(upgradedMigration, /PROJECT_SOURCE_DIR}\/ltk\/\*/);
+    assert.match(upgradedMigration, /PROJECT_SOURCE_DIR}\/LunarLtk\/\*/);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
