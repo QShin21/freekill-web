@@ -53,6 +53,14 @@ test("web packaging marks media packs as deferred downloads", async () => {
       true,
     );
     assert.ok(await readFile(join(output, `${mediaAsset.url.slice(1)}.br`)));
+
+    const bootstrap = await readFile(join(output, "bootstrap.js"), "utf8");
+    assert.match(bootstrap, /url\.searchParams\.set\("v", asset\.revision\)/);
+    assert.match(bootstrap, /asset\.startup === false \? "" : "v2\/"/);
+    assert.match(
+      bootstrap,
+      /fetch\(revisionedAssetUrl\(asset\), \{ cache: "no-store" \}\)/,
+    );
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

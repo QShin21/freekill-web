@@ -48,7 +48,19 @@ function downloadSize(asset) {
 }
 
 function revisionKey(asset) {
-  return `/.freekill-cache/${asset.revision}/${encodeURIComponent(asset.url)}`;
+  // Deferred media packs already carry their revision in the filename, so
+  // their existing cache markers are safe to reuse. Startup artifacts use
+  // stable filenames and need a new marker namespace after switching to
+  // revisioned CDN requests, otherwise a stale CDN response cached under a
+  // current manifest revision could be reused indefinitely.
+  const markerVersion = asset.startup === false ? "" : "v2/";
+  return `/.freekill-cache/${markerVersion}${asset.revision}/${encodeURIComponent(asset.url)}`;
+}
+
+function revisionedAssetUrl(asset) {
+  const url = new URL(asset.url, location.href);
+  url.searchParams.set("v", asset.revision);
+  return url.href;
 }
 
 async function cacheAsset(cache, asset, response) {
@@ -91,7 +103,7 @@ async function fetchAndCache(cacheName, cache, asset, onBytes = () => {}, allowN
     return true;
   }
   if (!allowNetwork) return false;
-  const response = await fetch(asset.url, { cache: "no-store" });
+  const response = await fetch(revisionedAssetUrl(asset), { cache: "no-store" });
   if (!response.ok) throw new Error(`${asset.url}: HTTP ${response.status}`);
   await cacheAsset(cache, asset, response);
   onBytes(downloadSize(asset));
