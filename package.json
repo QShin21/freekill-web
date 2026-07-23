@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm --prefix gateway test && node --test test/web-media.test.mjs test/package-web.test.mjs && npm run test:syntax",
+    "test": "npm --prefix gateway test && node --test test/web-media.test.mjs test/package-web.test.mjs test/nginx-config.test.mjs && npm run test:syntax",
     "test:syntax": "node --check web/bootstrap.js && node --check web/media-pack.js && node --check web/service-worker.js && node --check scripts/package-web.mjs && node --check scripts/prepare-upstream.mjs && node --check scripts/prepare-web-media.mjs && node --check scripts/update-prepared-source.mjs",
     "package:web": "node scripts/package-web.mjs"
   },
