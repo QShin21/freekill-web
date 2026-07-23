@@ -82,6 +82,7 @@ test("web packaging marks media packs as deferred downloads", async () => {
     assert.match(bootstrap, /function fitQtCanvasesToWindows\(\)/);
     assert.match(bootstrap, /screen\.querySelector\("#qt-shadow-container"\)\?\.shadowRoot/);
     assert.match(bootstrap, /canvas\.qt-window-content/);
+    assert.match(bootstrap, /min-width: 0;\s*min-height: 0;/s);
     assert.match(bootstrap, /new MutationObserver/);
     assert.match(bootstrap, /observer\.observe\(screen, \{ childList: true, subtree: true \}\)/);
     assert.match(bootstrap, /fitQtCanvasesToWindows\(\);\s*document\.body\.dataset\.state/s);
