@@ -206,6 +206,22 @@ function mediaStatus(manifest, state, pack = null, error = null) {
   window.dispatchEvent(new CustomEvent("freekill-media-status", { detail: status }));
 }
 
+function fitQtCanvasesToWindows() {
+  const shadowRoot = screen.querySelector("#qt-shadow-container")?.shadowRoot;
+  if (!shadowRoot || shadowRoot.querySelector("#freekill-canvas-fit")) return;
+  const style = document.createElement("style");
+  style.id = "freekill-canvas-fit";
+  style.textContent = `
+    canvas.qt-window-content {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+    }
+  `;
+  shadowRoot.append(style);
+}
+
 async function mountMediaResponse(runtime, manifest, pack, response) {
   const key = `${pack.id}:${pack.revision}`;
   if (mountedMediaPacks.has(key)) return;
@@ -294,6 +310,7 @@ async function loadQtApplication(context) {
       entryFunction,
       containerElements: [screen],
       onLoaded() {
+        fitQtCanvasesToWindows();
         document.body.dataset.state = "ready";
         loading.setAttribute("aria-hidden", "true");
         if (runtimeModule) void downloadDeferredMedia(runtimeModule, context);

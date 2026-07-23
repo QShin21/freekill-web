@@ -79,6 +79,10 @@ test("web packaging marks media packs as deferred downloads", async () => {
     assert.match(bootstrap, /locateFile: locateRuntimeFile/);
     assert.match(bootstrap, /console\.info\(`\[FreeKill\] \$\{text\}`\)/);
     assert.match(bootstrap, /console\.error\(`\[FreeKill\] \$\{text\}`\)/);
+    assert.match(bootstrap, /function fitQtCanvasesToWindows\(\)/);
+    assert.match(bootstrap, /screen\.querySelector\("#qt-shadow-container"\)\?\.shadowRoot/);
+    assert.match(bootstrap, /canvas\.qt-window-content/);
+    assert.match(bootstrap, /fitQtCanvasesToWindows\(\);\s*document\.body\.dataset\.state/s);
 
     const index = await readFile(join(output, "index.html"), "utf8");
     assert.doesNotMatch(index, /<script src="(?:qtloader|FreeKill)/);
@@ -88,8 +92,6 @@ test("web packaging marks media packs as deferred downloads", async () => {
     assert.doesNotMatch(serviceWorker, /"\/FreeKill(?:\.worker)?\.js"/);
     assert.doesNotMatch(serviceWorker, /"\/qtloader\.js"/);
 
-    const styles = await readFile(join(output, "styles.css"), "utf8");
-    assert.match(styles, /#screen canvas\s*\{[^}]*width: 100%;[^}]*height: 100%;/s);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
