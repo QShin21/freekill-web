@@ -206,9 +206,10 @@ function mediaStatus(manifest, state, pack = null, error = null) {
   window.dispatchEvent(new CustomEvent("freekill-media-status", { detail: status }));
 }
 
-function fitQtCanvasesToWindows() {
+function installQtCanvasFitStyle() {
   const shadowRoot = screen.querySelector("#qt-shadow-container")?.shadowRoot;
-  if (!shadowRoot || shadowRoot.querySelector("#freekill-canvas-fit")) return;
+  if (!shadowRoot) return false;
+  if (shadowRoot.querySelector("#freekill-canvas-fit")) return true;
   const style = document.createElement("style");
   style.id = "freekill-canvas-fit";
   style.textContent = `
@@ -220,6 +221,16 @@ function fitQtCanvasesToWindows() {
     }
   `;
   shadowRoot.append(style);
+  return true;
+}
+
+function fitQtCanvasesToWindows() {
+  if (installQtCanvasFitStyle()) return;
+  const observer = new MutationObserver(() => {
+    if (installQtCanvasFitStyle()) observer.disconnect();
+  });
+  observer.observe(screen, { childList: true, subtree: true });
+  setTimeout(() => observer.disconnect(), 10_000);
 }
 
 async function mountMediaResponse(runtime, manifest, pack, response) {
