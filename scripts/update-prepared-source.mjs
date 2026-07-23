@@ -57,6 +57,48 @@ const invalidRuntimeExports = `  set_target_properties(FreeKill PROPERTIES
   )
 `;
 
+const initialPageAnchor = `  Component.onCompleted: {
+`;
+
+const webInitialPageLoader = `  function loadInitialPage() {
+    const component = Qt.createComponent("Fk.Pages.Common", "Init");
+    if (!component) {
+      console.error("Unable to create the initial page component.");
+      return;
+    }
+
+    const wasLoading = component.status === Component.Loading;
+    const finishLoading = () => {
+      if (component.status === Component.Ready) {
+        if (wasLoading) component.statusChanged.disconnect(finishLoading);
+        mainStack.push(component);
+        if (Config.firstRun) {
+          Config.firstRun = false;
+          mainStack.push(Qt.createComponent("Tutorial.qml").createObject());
+        }
+      } else if (component.status === Component.Error) {
+        if (wasLoading) component.statusChanged.disconnect(finishLoading);
+        console.error("Unable to load the initial page: " + component.errorString());
+      }
+    };
+
+    if (wasLoading) {
+      component.statusChanged.connect(finishLoading);
+    } else {
+      finishLoading();
+    }
+  }
+
+  Component.onCompleted: {
+`;
+
+const immediateInitialPagePush = `    mainStack.push(Qt.createComponent("Fk.Pages.Common", "Init"));
+    if (Config.firstRun) {
+      Config.firstRun = false;
+      mainStack.push(Qt.createComponent("Tutorial.qml").createObject());
+    }
+`;
+
 const options = argumentsFrom(process.argv.slice(2));
 const cmakePath = join(options.freeKill, "src", "CMakeLists.txt");
 const before = (await readFile(cmakePath, "utf8")).replaceAll("\r\n", "\n");
@@ -82,4 +124,31 @@ if (after === before) {
 } else {
   await writeFile(cmakePath, after);
   console.log("Updated prepared FreeKill source for incremental web media.");
+}
+
+const rootPagePath = join(options.freeKill, "Fk", "Base", "RootPage.qml");
+const rootPageBefore = (await readFile(rootPagePath, "utf8")).replaceAll("\r\n", "\n");
+let rootPageAfter = rootPageBefore;
+if (!rootPageAfter.includes("function loadInitialPage()")) {
+  const anchorCount = rootPageAfter.split(initialPageAnchor).length - 1;
+  if (anchorCount !== 1) {
+    throw new Error(
+      `Expected one initial page loader anchor in ${rootPagePath}, found ${anchorCount}`,
+    );
+  }
+  const pushCount = rootPageAfter.split(immediateInitialPagePush).length - 1;
+  if (pushCount !== 1) {
+    throw new Error(
+      `Expected one immediate initial page push in ${rootPagePath}, found ${pushCount}`,
+    );
+  }
+  rootPageAfter = rootPageAfter
+    .replace(initialPageAnchor, webInitialPageLoader)
+    .replace(immediateInitialPagePush, "    loadInitialPage();\n");
+}
+if (rootPageAfter === rootPageBefore) {
+  console.log("Prepared FreeKill initial page loading is current.");
+} else {
+  await writeFile(rootPagePath, rootPageAfter);
+  console.log("Updated prepared FreeKill initial page loading for WebAssembly.");
 }
