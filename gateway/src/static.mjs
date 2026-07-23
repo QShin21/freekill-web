@@ -33,7 +33,7 @@ const NO_STORE = new Set([
 
 const SECURITY_HEADERS = {
   "content-security-policy":
-    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; " +
+    "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self'; " +
     "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ws: wss:; " +
     "worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
   "cross-origin-embedder-policy": "require-corp",
