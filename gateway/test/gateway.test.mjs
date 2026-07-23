@@ -134,6 +134,10 @@ test("static files include WebAssembly security and cache headers", async () => 
       page.headers["content-security-policy"],
       /script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'/,
     );
+    assert.match(
+      page.headers["content-security-policy"],
+      /style-src 'self' 'unsafe-inline'/,
+    );
     assert.match(page.headers["content-security-policy"], /worker-src 'self' blob:/);
 
     const compressed = await get(current.port, "/game.wasm", { "accept-encoding": "br, gzip" });
