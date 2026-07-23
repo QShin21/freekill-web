@@ -105,7 +105,7 @@ const legacyWebInitialPageLoader = `  function loadInitialPage() {
   Component.onCompleted: {
 `;
 
-const webInitialPageLoader = `  function pushLoadedComponent(component, label, onReady) {
+const tutorialWebInitialPageLoader = `  function pushLoadedComponent(component, label, onReady) {
     if (!component) {
       console.error("Unable to create " + label + " component.");
       return;
@@ -157,6 +157,53 @@ const webInitialPageLoader = `  function pushLoadedComponent(component, label, o
   Component.onCompleted: {
 `;
 
+const webInitialPageLoader = `  function pushLoadedComponent(component, label, onReady) {
+    if (!component) {
+      console.error("Unable to create " + label + " component.");
+      return;
+    }
+
+    let waiting = component.status === Component.Loading;
+    const finishLoading = () => {
+      if (component.status === Component.Ready) {
+        if (waiting) {
+          component.statusChanged.disconnect(finishLoading);
+          waiting = false;
+        }
+        const page = component.createObject(mainStack);
+        if (!page) {
+          console.error("Unable to instantiate " + label + ": " + component.errorString());
+          return;
+        }
+        mainStack.push(page);
+        if (onReady) onReady();
+      } else if (component.status === Component.Error) {
+        if (waiting) {
+          component.statusChanged.disconnect(finishLoading);
+          waiting = false;
+        }
+        console.error("Unable to load " + label + ": " + component.errorString());
+      }
+    };
+
+    if (waiting) {
+      component.statusChanged.connect(finishLoading);
+    } else {
+      finishLoading();
+    }
+  }
+
+  function loadInitialPage() {
+    const component = Qt.createComponent(
+      "Fk.Pages.Common", "Init", Component.Asynchronous, root);
+    pushLoadedComponent(component, "the web login", () => {
+      Config.firstRun = false;
+    });
+  }
+
+  Component.onCompleted: {
+`;
+
 const relativeWebTutorialComponent = `        const tutorial = Qt.createComponent(
           "Tutorial.qml", Component.Asynchronous, root);`;
 
@@ -168,6 +215,32 @@ const immediateInitialPagePush = `    mainStack.push(Qt.createComponent("Fk.Page
       Config.firstRun = false;
       mainStack.push(Qt.createComponent("Tutorial.qml").createObject());
     }
+`;
+
+const qmlSplashBlock = `    if (!Cpp.debug) {
+      splashLoader.source = "Splash.qml";
+      splashLoader.item.disappeared.connect(() => {
+        splashLoader.source = "";
+      });
+    }
+`;
+
+const configuredServerHeaderMethods = `#ifdef Q_OS_WASM
+  Q_INVOKABLE QString configuredServerAddress() const;
+  Q_INVOKABLE int configuredServerPort() const;
+#endif
+`;
+
+const configuredServerImplementations = `#ifdef Q_OS_WASM
+QString QmlBackend::configuredServerAddress() const {
+  return WebPlatform::serverAddress();
+}
+
+int QmlBackend::configuredServerPort() const {
+  return WebPlatform::serverPort();
+}
+#endif
+
 `;
 
 const nativeSplashMacro = `#define SHOW_SPLASH_MSG(msg)                                                   \\
@@ -253,10 +326,48 @@ if (entryAfter === entryBefore) {
   console.log("Disabled the native FreeKill splash window in browsers.");
 }
 
-const rootPagePaths = [
-  join(options.freeKill, "Fk", "Base", "RootPage.qml"),
-  join(options.freeKill, "packages", "freekill-core", "Fk", "Base", "RootPage.qml"),
-];
+const qmlBackendHeaderPath = join(options.freeKill, "src", "ui", "qmlbackend.h");
+const qmlBackendHeaderBefore = (await readFile(qmlBackendHeaderPath, "utf8")).replaceAll(
+  "\r\n",
+  "\n",
+);
+let qmlBackendHeaderAfter = qmlBackendHeaderBefore;
+if (!qmlBackendHeaderAfter.includes("configuredServerAddress")) {
+  const anchor = "  Q_INVOKABLE QString loadTips();\n";
+  const count = qmlBackendHeaderAfter.split(anchor).length - 1;
+  if (count !== 1) {
+    throw new Error(`Expected one configured server header anchor in ${qmlBackendHeaderPath}`);
+  }
+  qmlBackendHeaderAfter = qmlBackendHeaderAfter.replace(
+    anchor,
+    anchor + configuredServerHeaderMethods,
+  );
+}
+if (qmlBackendHeaderAfter !== qmlBackendHeaderBefore) {
+  await writeFile(qmlBackendHeaderPath, qmlBackendHeaderAfter);
+  console.log("Exposed the browser deployment server configuration to QML.");
+}
+
+const qmlBackendPath = join(options.freeKill, "src", "ui", "qmlbackend.cpp");
+const qmlBackendBefore = (await readFile(qmlBackendPath, "utf8")).replaceAll("\r\n", "\n");
+let qmlBackendAfter = qmlBackendBefore;
+if (!qmlBackendAfter.includes("QmlBackend::configuredServerAddress")) {
+  const anchor = "void QmlBackend::saveConf(const QString &conf) {\n";
+  const count = qmlBackendAfter.split(anchor).length - 1;
+  if (count !== 1) {
+    throw new Error(`Expected one configured server implementation anchor in ${qmlBackendPath}`);
+  }
+  qmlBackendAfter = qmlBackendAfter.replace(
+    anchor,
+    configuredServerImplementations + anchor,
+  );
+}
+if (qmlBackendAfter !== qmlBackendBefore) {
+  await writeFile(qmlBackendPath, qmlBackendAfter);
+  console.log("Added the browser deployment server configuration accessors.");
+}
+
+const rootPagePaths = [join(options.freeKill, "Fk", "Base", "RootPage.qml")];
 for (const rootPagePath of rootPagePaths) {
   const rootPageBefore = (await readFile(rootPagePath, "utf8")).replaceAll("\r\n", "\n");
   let rootPageAfter = rootPageBefore;
@@ -264,7 +375,9 @@ for (const rootPagePath of rootPagePaths) {
     relativeWebTutorialComponent,
     qualifiedWebTutorialComponent,
   );
-  if (rootPageAfter.includes(legacyWebInitialPageLoader)) {
+  if (rootPageAfter.includes(tutorialWebInitialPageLoader)) {
+    rootPageAfter = rootPageAfter.replace(tutorialWebInitialPageLoader, webInitialPageLoader);
+  } else if (rootPageAfter.includes(legacyWebInitialPageLoader)) {
     rootPageAfter = rootPageAfter.replace(legacyWebInitialPageLoader, webInitialPageLoader);
   } else if (!rootPageAfter.includes("function loadInitialPage()")) {
     const anchorCount = rootPageAfter.split(initialPageAnchor).length - 1;
@@ -283,6 +396,7 @@ for (const rootPagePath of rootPagePaths) {
       .replace(initialPageAnchor, webInitialPageLoader)
       .replace(immediateInitialPagePush, "    loadInitialPage();\n");
   }
+  rootPageAfter = rootPageAfter.replace(qmlSplashBlock, "");
   if (rootPageAfter === rootPageBefore) {
     console.log(`Prepared FreeKill initial page loading is current: ${rootPagePath}`);
   } else {

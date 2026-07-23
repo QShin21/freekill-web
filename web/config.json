@@ -1,4 +1,6 @@
 {
   "webSocketUrl": "wss://ws.zijing.yejiaxin.online/ws",
-  "webSocketPath": "/ws"
+  "webSocketPath": "/ws",
+  "serverAddress": "123.57.220.25",
+  "serverPort": 9527
 }

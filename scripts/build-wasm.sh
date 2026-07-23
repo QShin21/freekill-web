@@ -86,9 +86,13 @@ if [[ -n "${EXTRA_PACKAGES_DIR:-}" ]]; then
 fi
 
 # Extra package snapshots may replace freekill-core after the initial upstream
-# preparation. Apply the web overlays afterwards so both the root QML module
-# and the package copy used for FK_WEB_PACKAGES_DIR contain the same fixes.
+# preparation. Reapply browser-only C++ and runtime QML overlays afterwards.
+# Never apply QML runtime fixes to the package snapshot: calcFileMD5() must see
+# byte-identical server scripts even when the browser UI needs different code.
 cp -R "${repo_root}/overlays/freekill/src/." "${free_kill_source}/src/"
+if [[ -d "${repo_root}/overlays/freekill/Fk" ]]; then
+  cp -R "${repo_root}/overlays/freekill/Fk/." "${free_kill_source}/Fk/"
+fi
 node "${repo_root}/scripts/update-prepared-source.mjs" \
   --free-kill "${free_kill_source}"
 

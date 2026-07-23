@@ -115,6 +115,9 @@ test("the Wasm build reapplies web overlays after extra packages", async () => {
   const reapplySourceOverlays = buildScript.indexOf(
     'cp -R "${repo_root}/overlays/freekill/src/." "${free_kill_source}/src/"',
   );
+  const reapplyQmlOverlays = buildScript.indexOf(
+    'cp -R "${repo_root}/overlays/freekill/Fk/." "${free_kill_source}/Fk/"',
+  );
   const prepareWebMedia = buildScript.indexOf(
     'node "${repo_root}/scripts/prepare-web-media.mjs"',
   );
@@ -125,7 +128,9 @@ test("the Wasm build reapplies web overlays after extra packages", async () => {
     /rm -rf "\$\{free_kill_source:\?\}\/packages"[\s\S]*tar --exclude='\.git'/,
   );
   assert.ok(reapplySourceOverlays > extraPackages);
+  assert.ok(reapplyQmlOverlays > extraPackages);
   assert.ok(updatePreparedSource > reapplySourceOverlays);
+  assert.ok(updatePreparedSource > reapplyQmlOverlays);
   assert.ok(updatePreparedSource > extraPackages);
   assert.ok(prepareWebMedia > updatePreparedSource);
 });
@@ -151,6 +156,29 @@ test("the WebSocket overlay constructs Qt 6.8 CBOR errors explicitly", async () 
   assert.match(source, /QCborError\{QCborError::NoError\}/);
 });
 
+test("the browser opens a deployment-configured username and password login", async () => {
+  const login = await readFile(
+    join(repositoryRoot, "overlays", "freekill", "Fk", "Pages", "Common", "Init.qml"),
+    "utf8",
+  );
+  const platform = await readFile(
+    join(repositoryRoot, "overlays", "freekill", "src", "web", "web_platform.cpp"),
+    "utf8",
+  );
+  const config = JSON.parse(await readFile(join(repositoryRoot, "web", "config.json"), "utf8"));
+
+  assert.equal(config.serverAddress, "123.57.220.25");
+  assert.equal(config.serverPort, 9527);
+  assert.match(platform, /config\.serverAddress/);
+  assert.match(platform, /config\.serverPort/);
+  assert.match(login, /Backend\.configuredServerAddress\(\)/);
+  assert.match(login, /Backend\.configuredServerPort\(\)/);
+  assert.match(login, /Backend\.joinServer\(configuredAddress, configuredPort\)/);
+  assert.match(login, /placeholderText: qsTr\("Username"\)/);
+  assert.match(login, /placeholderText: qsTr\("Password"\)/);
+  assert.doesNotMatch(login, /Server Address|Join Server|PackageManage/);
+});
+
 test("prepared sources migrate to split packages and merged Qt runtime exports", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "freekill-web-source-"));
   const sourceDirectory = join(temporary, "FreeKill");
@@ -165,6 +193,8 @@ test("prepared sources migrate to split packages and merged Qt runtime exports",
     "Base",
     "RootPage.qml",
   );
+  const qmlBackendHeaderPath = join(sourceDirectory, "src", "ui", "qmlbackend.h");
+  const qmlBackendPath = join(sourceDirectory, "src", "ui", "qmlbackend.cpp");
   const legacy = `if (EMSCRIPTEN)
   set_target_properties(FreeKill PROPERTIES QT_WASM_MAXIMUM_MEMORY 2147483648)
   target_link_options(FreeKill PRIVATE
@@ -185,7 +215,24 @@ endif()
       Config.firstRun = false;
       mainStack.push(Qt.createComponent("Tutorial.qml").createObject());
     }
+    if (!Cpp.debug) {
+      splashLoader.source = "Splash.qml";
+      splashLoader.item.disappeared.connect(() => {
+        splashLoader.source = "";
+      });
+    }
   }
+}
+`;
+  const legacyQmlBackendHeader = `class QmlBackend {
+  Q_INVOKABLE QString loadTips();
+};
+`;
+  const legacyQmlBackend = `QString QmlBackend::loadTips() {
+  return "tips";
+}
+
+void QmlBackend::saveConf(const QString &conf) {
 }
 `;
   const legacyEntry = `#define SHOW_SPLASH_MSG(msg)                                                   \\
@@ -202,10 +249,13 @@ void startClient() {
     await mkdir(dirname(cmakePath), { recursive: true });
     await mkdir(dirname(rootPagePath), { recursive: true });
     await mkdir(dirname(packagedRootPagePath), { recursive: true });
+    await mkdir(dirname(qmlBackendHeaderPath), { recursive: true });
     await writeFile(cmakePath, legacy);
     await writeFile(entryPath, legacyEntry);
     await writeFile(rootPagePath, legacyRootPage);
     await writeFile(packagedRootPagePath, legacyRootPage);
+    await writeFile(qmlBackendHeaderPath, legacyQmlBackendHeader);
+    await writeFile(qmlBackendPath, legacyQmlBackend);
     const script = join(repositoryRoot, "scripts", "update-prepared-source.mjs");
     await exec(process.execPath, [script, "--free-kill", sourceDirectory]);
     await exec(process.execPath, [script, "--free-kill", sourceDirectory]);
@@ -213,6 +263,8 @@ void startClient() {
     const migratedEntry = await readFile(entryPath, "utf8");
     const migratedRootPage = await readFile(rootPagePath, "utf8");
     const migratedPackagedRootPage = await readFile(packagedRootPagePath, "utf8");
+    const migratedQmlBackendHeader = await readFile(qmlBackendHeaderPath, "utf8");
+    const migratedQmlBackend = await readFile(qmlBackendPath, "utf8");
     assert.match(migrated, /QT_WASM_EXTRA_EXPORTED_METHODS "addRunDependency,removeRunDependency"/);
     assert.match(migrated, /-lidbfs\.js/);
     assert.match(migrated, /set\(FK_WEB_PACKAGES_DIR/);
@@ -229,22 +281,20 @@ void startClient() {
     assert.match(migratedRootPage, /component\.status === Component\.Loading/);
     assert.match(migratedRootPage, /Component\.Asynchronous, root/);
     assert.match(migratedRootPage, /component\.createObject\(mainStack\)/);
-    assert.match(
-      migratedRootPage,
-      /"Fk\.Pages\.Common", "Tutorial", Component\.Asynchronous, root/,
-    );
-    assert.doesNotMatch(
-      migratedRootPage,
-      /"Tutorial\.qml", Component\.Asynchronous, root/,
-    );
-    assert.match(migratedRootPage, /pushLoadedComponent\(tutorial, "the tutorial"\)/);
+    assert.match(migratedRootPage, /pushLoadedComponent\(component, "the web login"/);
+    assert.doesNotMatch(migratedRootPage, /Tutorial/);
+    assert.doesNotMatch(migratedRootPage, /splashLoader\.source = "Splash\.qml"/);
     assert.match(migratedRootPage, /component\.errorString\(\)/);
     assert.equal((migratedRootPage.match(/loadInitialPage\(\)/g) || []).length, 2);
     assert.doesNotMatch(
       migratedRootPage,
       /mainStack\.push\(Qt\.createComponent\("Fk\.Pages\.Common", "Init"\)\)/,
     );
-    assert.equal(migratedPackagedRootPage, migratedRootPage);
+    assert.equal(migratedPackagedRootPage, legacyRootPage);
+    assert.match(migratedQmlBackendHeader, /configuredServerAddress\(\) const/);
+    assert.match(migratedQmlBackendHeader, /configuredServerPort\(\) const/);
+    assert.match(migratedQmlBackend, /WebPlatform::serverAddress\(\)/);
+    assert.match(migratedQmlBackend, /WebPlatform::serverPort\(\)/);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

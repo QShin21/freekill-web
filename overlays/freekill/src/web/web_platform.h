@@ -7,6 +7,8 @@
 namespace WebPlatform {
 
 QString webSocketUrl();
+QString serverAddress();
+int serverPort();
 QString deviceUuid();
 QString persistentPath(const QString &relativePath);
 void syncPersistentFileSystem();

@@ -18,6 +18,21 @@ EM_JS(char *, duplicateWebSocketUrl, (), {
   return result;
 });
 
+EM_JS(char *, duplicateServerAddress, (), {
+  const config = globalThis.FREEKILL_WEB_CONFIG || {};
+  const value = String(config.serverAddress || location.hostname);
+  const size = lengthBytesUTF8(value) + 1;
+  const result = _malloc(size);
+  stringToUTF8(value, result, size);
+  return result;
+});
+
+EM_JS(int, configuredServerPort, (), {
+  const config = globalThis.FREEKILL_WEB_CONFIG || {};
+  const value = Number(config.serverPort);
+  return Number.isInteger(value) && value > 0 && value <= 65535 ? value : 9527;
+});
+
 EM_JS(char *, duplicateDeviceUuid, (), {
   const key = "freekill.deviceUuid";
   let value = "";
@@ -52,6 +67,10 @@ QString takeString(char *value) {
 namespace WebPlatform {
 
 QString webSocketUrl() { return takeString(duplicateWebSocketUrl()); }
+
+QString serverAddress() { return takeString(duplicateServerAddress()); }
+
+int serverPort() { return configuredServerPort(); }
 
 QString deviceUuid() { return takeString(duplicateDeviceUuid()); }
 
