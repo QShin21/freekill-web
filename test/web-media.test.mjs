@@ -133,6 +133,10 @@ test("the Wasm build reapplies web overlays after extra packages", async () => {
   assert.ok(updatePreparedSource > reapplyQmlOverlays);
   assert.ok(updatePreparedSource > extraPackages);
   assert.ok(prepareWebMedia > updatePreparedSource);
+  assert.match(
+    buildScript,
+    /for core_directory in Fk LunarLtk lua ltk; do/,
+  );
 });
 
 test("the browser package manager seeds the exact bundled server database", async () => {

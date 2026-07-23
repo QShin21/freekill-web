@@ -75,7 +75,10 @@ if [[ -n "${EXTRA_PACKAGES_DIR:-}" ]]; then
   (cd "${EXTRA_PACKAGES_DIR}" && tar --exclude='.git' -cf - .) | \
     (cd "${free_kill_source}/packages" && tar -xf -)
   if [[ -d "${EXTRA_PACKAGES_DIR}/freekill-core" ]]; then
-    for core_directory in Fk lua; do
+    # The browser deliberately boots from the top-level runtime so its direct
+    # login UI can differ from the byte-identical package used for MD5 checks.
+    # Copy the core runtime's QML and Lua dependencies alongside that entrypoint.
+    for core_directory in Fk LunarLtk lua ltk; do
       if [[ -d "${EXTRA_PACKAGES_DIR}/freekill-core/${core_directory}" ]]; then
         rm -rf "${free_kill_source:?}/${core_directory}"
         cp -R "${EXTRA_PACKAGES_DIR}/freekill-core/${core_directory}" \
