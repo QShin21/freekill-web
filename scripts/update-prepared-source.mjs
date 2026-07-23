@@ -73,7 +73,7 @@ const invalidRuntimeExports = `  set_target_properties(FreeKill PROPERTIES
 const initialPageAnchor = `  Component.onCompleted: {
 `;
 
-const webInitialPageLoader = `  function loadInitialPage() {
+const legacyWebInitialPageLoader = `  function loadInitialPage() {
     const component = Qt.createComponent("Fk.Pages.Common", "Init");
     if (!component) {
       console.error("Unable to create the initial page component.");
@@ -100,6 +100,58 @@ const webInitialPageLoader = `  function loadInitialPage() {
     } else {
       finishLoading();
     }
+  }
+
+  Component.onCompleted: {
+`;
+
+const webInitialPageLoader = `  function pushLoadedComponent(component, label, onReady) {
+    if (!component) {
+      console.error("Unable to create " + label + " component.");
+      return;
+    }
+
+    let waiting = component.status === Component.Loading;
+    const finishLoading = () => {
+      if (component.status === Component.Ready) {
+        if (waiting) {
+          component.statusChanged.disconnect(finishLoading);
+          waiting = false;
+        }
+        const page = component.createObject(mainStack);
+        if (!page) {
+          console.error("Unable to instantiate " + label + ": " + component.errorString());
+          return;
+        }
+        mainStack.push(page);
+        if (onReady) onReady();
+      } else if (component.status === Component.Error) {
+        if (waiting) {
+          component.statusChanged.disconnect(finishLoading);
+          waiting = false;
+        }
+        console.error("Unable to load " + label + ": " + component.errorString());
+      }
+    };
+
+    if (waiting) {
+      component.statusChanged.connect(finishLoading);
+    } else {
+      finishLoading();
+    }
+  }
+
+  function loadInitialPage() {
+    const component = Qt.createComponent(
+      "Fk.Pages.Common", "Init", Component.Asynchronous, root);
+    pushLoadedComponent(component, "the initial page", () => {
+      if (Config.firstRun) {
+        Config.firstRun = false;
+        const tutorial = Qt.createComponent(
+          "Tutorial.qml", Component.Asynchronous, root);
+        pushLoadedComponent(tutorial, "the tutorial");
+      }
+    });
   }
 
   Component.onCompleted: {
@@ -153,7 +205,9 @@ const rootPagePaths = [
 for (const rootPagePath of rootPagePaths) {
   const rootPageBefore = (await readFile(rootPagePath, "utf8")).replaceAll("\r\n", "\n");
   let rootPageAfter = rootPageBefore;
-  if (!rootPageAfter.includes("function loadInitialPage()")) {
+  if (rootPageAfter.includes(legacyWebInitialPageLoader)) {
+    rootPageAfter = rootPageAfter.replace(legacyWebInitialPageLoader, webInitialPageLoader);
+  } else if (!rootPageAfter.includes("function loadInitialPage()")) {
     const anchorCount = rootPageAfter.split(initialPageAnchor).length - 1;
     if (anchorCount !== 1) {
       throw new Error(

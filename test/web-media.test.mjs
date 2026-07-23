@@ -159,8 +159,12 @@ endif()
     assert.match(migrated, /LINK_DEPENDS \$\{FK_WEB_PRELOAD_FILES\}/);
     assert.doesNotMatch(migrated, /client packages/);
     assert.equal((migrated.match(/EXPORTED_RUNTIME_METHODS/g) || []).length, 0);
+    assert.match(migratedRootPage, /function pushLoadedComponent\(component, label, onReady\)/);
     assert.match(migratedRootPage, /function loadInitialPage\(\)/);
     assert.match(migratedRootPage, /component\.status === Component\.Loading/);
+    assert.match(migratedRootPage, /Component\.Asynchronous, root/);
+    assert.match(migratedRootPage, /component\.createObject\(mainStack\)/);
+    assert.match(migratedRootPage, /pushLoadedComponent\(tutorial, "the tutorial"\)/);
     assert.match(migratedRootPage, /component\.errorString\(\)/);
     assert.equal((migratedRootPage.match(/loadInitialPage\(\)/g) || []).length, 2);
     assert.doesNotMatch(
