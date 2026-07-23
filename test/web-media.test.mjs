@@ -140,6 +140,17 @@ test("the browser package manager seeds the exact bundled server database", asyn
   assert.match(source, /std::make_unique<Sqlite3>\(persistentDatabase/);
 });
 
+test("the WebSocket overlay constructs Qt 6.8 CBOR errors explicitly", async () => {
+  const source = await readFile(
+    join(repositoryRoot, "overlays", "freekill", "src", "network", "client_socket.cpp"),
+    "utf8",
+  );
+  assert.doesNotMatch(source, /\*error = QCborError::/);
+  assert.match(source, /QCborError\{QCborError::IllegalType\}/);
+  assert.match(source, /QCborError\{QCborError::UnknownError\}/);
+  assert.match(source, /QCborError\{QCborError::NoError\}/);
+});
+
 test("prepared sources migrate to split packages and merged Qt runtime exports", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "freekill-web-source-"));
   const sourceDirectory = join(temporary, "FreeKill");
