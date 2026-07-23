@@ -28,6 +28,19 @@ const splitPreload = `  foreach(resource_dir IN ITEMS audio fonts image lua Fk c
     "SHELL:--preload-file \\"\${FK_WEB_PACKAGES_DIR}@/packages\\"")
 `;
 
+const trackedPreloadDependencies = `  file(GLOB_RECURSE FK_WEB_PRELOAD_FILES CONFIGURE_DEPENDS
+    LIST_DIRECTORIES false
+    "\${PROJECT_SOURCE_DIR}/audio/*"
+    "\${PROJECT_SOURCE_DIR}/fonts/*"
+    "\${PROJECT_SOURCE_DIR}/image/*"
+    "\${PROJECT_SOURCE_DIR}/lua/*"
+    "\${PROJECT_SOURCE_DIR}/Fk/*"
+    "\${PROJECT_SOURCE_DIR}/client/*"
+    "\${FK_WEB_PACKAGES_DIR}/*"
+  )
+  set_property(TARGET FreeKill APPEND PROPERTY LINK_DEPENDS \${FK_WEB_PRELOAD_FILES})
+`;
+
 const oldRuntimeExports = `  set_target_properties(FreeKill PROPERTIES QT_WASM_MAXIMUM_MEMORY 2147483648)
   target_link_options(FreeKill PRIVATE
     "SHELL:-s ALLOW_MEMORY_GROWTH=1"
@@ -110,6 +123,13 @@ if (!after.includes("set(FK_WEB_PACKAGES_DIR")) {
   }
   after = after.replace(oldPreload, splitPreload);
 }
+if (!after.includes("FK_WEB_PRELOAD_FILES")) {
+  const count = after.split(splitPreload).length - 1;
+  if (count !== 1) {
+    throw new Error(`Expected one split preload block in ${cmakePath}, found ${count}`);
+  }
+  after = after.replace(splitPreload, splitPreload + trackedPreloadDependencies);
+}
 if (after.includes(invalidRuntimeExports)) {
   after = after.replace(invalidRuntimeExports, mergedRuntimeExports);
 } else if (!after.includes("QT_WASM_EXTRA_EXPORTED_METHODS")) {
@@ -126,29 +146,34 @@ if (after === before) {
   console.log("Updated prepared FreeKill source for incremental web media.");
 }
 
-const rootPagePath = join(options.freeKill, "Fk", "Base", "RootPage.qml");
-const rootPageBefore = (await readFile(rootPagePath, "utf8")).replaceAll("\r\n", "\n");
-let rootPageAfter = rootPageBefore;
-if (!rootPageAfter.includes("function loadInitialPage()")) {
-  const anchorCount = rootPageAfter.split(initialPageAnchor).length - 1;
-  if (anchorCount !== 1) {
-    throw new Error(
-      `Expected one initial page loader anchor in ${rootPagePath}, found ${anchorCount}`,
-    );
+const rootPagePaths = [
+  join(options.freeKill, "Fk", "Base", "RootPage.qml"),
+  join(options.freeKill, "packages", "freekill-core", "Fk", "Base", "RootPage.qml"),
+];
+for (const rootPagePath of rootPagePaths) {
+  const rootPageBefore = (await readFile(rootPagePath, "utf8")).replaceAll("\r\n", "\n");
+  let rootPageAfter = rootPageBefore;
+  if (!rootPageAfter.includes("function loadInitialPage()")) {
+    const anchorCount = rootPageAfter.split(initialPageAnchor).length - 1;
+    if (anchorCount !== 1) {
+      throw new Error(
+        `Expected one initial page loader anchor in ${rootPagePath}, found ${anchorCount}`,
+      );
+    }
+    const pushCount = rootPageAfter.split(immediateInitialPagePush).length - 1;
+    if (pushCount !== 1) {
+      throw new Error(
+        `Expected one immediate initial page push in ${rootPagePath}, found ${pushCount}`,
+      );
+    }
+    rootPageAfter = rootPageAfter
+      .replace(initialPageAnchor, webInitialPageLoader)
+      .replace(immediateInitialPagePush, "    loadInitialPage();\n");
   }
-  const pushCount = rootPageAfter.split(immediateInitialPagePush).length - 1;
-  if (pushCount !== 1) {
-    throw new Error(
-      `Expected one immediate initial page push in ${rootPagePath}, found ${pushCount}`,
-    );
+  if (rootPageAfter === rootPageBefore) {
+    console.log(`Prepared FreeKill initial page loading is current: ${rootPagePath}`);
+  } else {
+    await writeFile(rootPagePath, rootPageAfter);
+    console.log(`Updated prepared FreeKill initial page loading: ${rootPagePath}`);
   }
-  rootPageAfter = rootPageAfter
-    .replace(initialPageAnchor, webInitialPageLoader)
-    .replace(immediateInitialPagePush, "    loadInitialPage();\n");
-}
-if (rootPageAfter === rootPageBefore) {
-  console.log("Prepared FreeKill initial page loading is current.");
-} else {
-  await writeFile(rootPagePath, rootPageAfter);
-  console.log("Updated prepared FreeKill initial page loading for WebAssembly.");
 }

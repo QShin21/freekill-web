@@ -108,6 +108,14 @@ test("prepared sources migrate to split packages and merged Qt runtime exports",
   const sourceDirectory = join(temporary, "FreeKill");
   const cmakePath = join(sourceDirectory, "src", "CMakeLists.txt");
   const rootPagePath = join(sourceDirectory, "Fk", "Base", "RootPage.qml");
+  const packagedRootPagePath = join(
+    sourceDirectory,
+    "packages",
+    "freekill-core",
+    "Fk",
+    "Base",
+    "RootPage.qml",
+  );
   const legacy = `if (EMSCRIPTEN)
   set_target_properties(FreeKill PROPERTIES QT_WASM_MAXIMUM_MEMORY 2147483648)
   target_link_options(FreeKill PRIVATE
@@ -134,16 +142,21 @@ endif()
   try {
     await mkdir(dirname(cmakePath), { recursive: true });
     await mkdir(dirname(rootPagePath), { recursive: true });
+    await mkdir(dirname(packagedRootPagePath), { recursive: true });
     await writeFile(cmakePath, legacy);
     await writeFile(rootPagePath, legacyRootPage);
+    await writeFile(packagedRootPagePath, legacyRootPage);
     const script = join(repositoryRoot, "scripts", "update-prepared-source.mjs");
     await exec(process.execPath, [script, "--free-kill", sourceDirectory]);
     await exec(process.execPath, [script, "--free-kill", sourceDirectory]);
     const migrated = await readFile(cmakePath, "utf8");
     const migratedRootPage = await readFile(rootPagePath, "utf8");
+    const migratedPackagedRootPage = await readFile(packagedRootPagePath, "utf8");
     assert.match(migrated, /QT_WASM_EXTRA_EXPORTED_METHODS "addRunDependency,removeRunDependency"/);
     assert.match(migrated, /-lidbfs\.js/);
     assert.match(migrated, /set\(FK_WEB_PACKAGES_DIR/);
+    assert.match(migrated, /file\(GLOB_RECURSE FK_WEB_PRELOAD_FILES CONFIGURE_DEPENDS/);
+    assert.match(migrated, /LINK_DEPENDS \$\{FK_WEB_PRELOAD_FILES\}/);
     assert.doesNotMatch(migrated, /client packages/);
     assert.equal((migrated.match(/EXPORTED_RUNTIME_METHODS/g) || []).length, 0);
     assert.match(migratedRootPage, /function loadInitialPage\(\)/);
@@ -154,6 +167,7 @@ endif()
       migratedRootPage,
       /mainStack\.push\(Qt\.createComponent\("Fk\.Pages\.Common", "Init"\)\)/,
     );
+    assert.equal(migratedPackagedRootPage, migratedRootPage);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
