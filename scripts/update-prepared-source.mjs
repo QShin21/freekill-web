@@ -18,7 +18,7 @@ const oldPreload = `  foreach(resource_dir IN ITEMS audio fonts image lua Fk cli
   endforeach()
 `;
 
-const splitPreload = `  foreach(resource_dir IN ITEMS audio fonts image lua Fk client)
+const splitPreload = `  foreach(resource_dir IN ITEMS audio fonts image lua ltk Fk LunarLtk client)
     target_link_options(FreeKill PRIVATE
       "SHELL:--preload-file \\"\${PROJECT_SOURCE_DIR}/\${resource_dir}@/\${resource_dir}\\"")
   endforeach()
@@ -34,7 +34,9 @@ const trackedPreloadDependencies = `  file(GLOB_RECURSE FK_WEB_PRELOAD_FILES CON
     "\${PROJECT_SOURCE_DIR}/fonts/*"
     "\${PROJECT_SOURCE_DIR}/image/*"
     "\${PROJECT_SOURCE_DIR}/lua/*"
+    "\${PROJECT_SOURCE_DIR}/ltk/*"
     "\${PROJECT_SOURCE_DIR}/Fk/*"
+    "\${PROJECT_SOURCE_DIR}/LunarLtk/*"
     "\${PROJECT_SOURCE_DIR}/client/*"
     "\${FK_WEB_PACKAGES_DIR}/*"
   )

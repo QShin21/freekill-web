@@ -275,6 +275,9 @@ void startClient() {
     assert.match(migrated, /set\(FK_WEB_PACKAGES_DIR/);
     assert.match(migrated, /file\(GLOB_RECURSE FK_WEB_PRELOAD_FILES CONFIGURE_DEPENDS/);
     assert.match(migrated, /LINK_DEPENDS \$\{FK_WEB_PRELOAD_FILES\}/);
+    assert.match(migrated, /IN ITEMS audio fonts image lua ltk Fk LunarLtk client/);
+    assert.match(migrated, /PROJECT_SOURCE_DIR}\/ltk\/\*/);
+    assert.match(migrated, /PROJECT_SOURCE_DIR}\/LunarLtk\/\*/);
     assert.doesNotMatch(migrated, /client packages/);
     assert.equal((migrated.match(/EXPORTED_RUNTIME_METHODS/g) || []).length, 0);
     assert.match(migratedEntry, /#ifdef Q_OS_WASM\n#define SHOW_SPLASH_MSG/);
