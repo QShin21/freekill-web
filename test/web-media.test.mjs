@@ -164,6 +164,14 @@ endif()
     assert.match(migratedRootPage, /component\.status === Component\.Loading/);
     assert.match(migratedRootPage, /Component\.Asynchronous, root/);
     assert.match(migratedRootPage, /component\.createObject\(mainStack\)/);
+    assert.match(
+      migratedRootPage,
+      /"Fk\.Pages\.Common", "Tutorial", Component\.Asynchronous, root/,
+    );
+    assert.doesNotMatch(
+      migratedRootPage,
+      /"Tutorial\.qml", Component\.Asynchronous, root/,
+    );
     assert.match(migratedRootPage, /pushLoadedComponent\(tutorial, "the tutorial"\)/);
     assert.match(migratedRootPage, /component\.errorString\(\)/);
     assert.equal((migratedRootPage.match(/loadInitialPage\(\)/g) || []).length, 2);

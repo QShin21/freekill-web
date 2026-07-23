@@ -148,7 +148,7 @@ const webInitialPageLoader = `  function pushLoadedComponent(component, label, o
       if (Config.firstRun) {
         Config.firstRun = false;
         const tutorial = Qt.createComponent(
-          "Tutorial.qml", Component.Asynchronous, root);
+          "Fk.Pages.Common", "Tutorial", Component.Asynchronous, root);
         pushLoadedComponent(tutorial, "the tutorial");
       }
     });
@@ -156,6 +156,12 @@ const webInitialPageLoader = `  function pushLoadedComponent(component, label, o
 
   Component.onCompleted: {
 `;
+
+const relativeWebTutorialComponent = `        const tutorial = Qt.createComponent(
+          "Tutorial.qml", Component.Asynchronous, root);`;
+
+const qualifiedWebTutorialComponent = `        const tutorial = Qt.createComponent(
+          "Fk.Pages.Common", "Tutorial", Component.Asynchronous, root);`;
 
 const immediateInitialPagePush = `    mainStack.push(Qt.createComponent("Fk.Pages.Common", "Init"));
     if (Config.firstRun) {
@@ -205,6 +211,10 @@ const rootPagePaths = [
 for (const rootPagePath of rootPagePaths) {
   const rootPageBefore = (await readFile(rootPagePath, "utf8")).replaceAll("\r\n", "\n");
   let rootPageAfter = rootPageBefore;
+  rootPageAfter = rootPageAfter.replaceAll(
+    relativeWebTutorialComponent,
+    qualifiedWebTutorialComponent,
+  );
   if (rootPageAfter.includes(legacyWebInitialPageLoader)) {
     rootPageAfter = rootPageAfter.replace(legacyWebInitialPageLoader, webInitialPageLoader);
   } else if (!rootPageAfter.includes("function loadInitialPage()")) {
