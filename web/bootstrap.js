@@ -7,6 +7,7 @@ const progress = document.querySelector("#loading-progress");
 const retry = document.querySelector("#retry");
 const screen = document.querySelector("#screen");
 const CACHE_PREFIX = "freekill-web-";
+const MAX_ASSET_ATTEMPTS = 4;
 const mountedMediaPacks = new Set();
 
 function showStatus(title, description = "", value = null) {
@@ -95,10 +96,20 @@ async function loadQtRuntime(manifest) {
 }
 
 async function cacheAsset(cache, asset, response) {
-  await Promise.all([
-    cache.put(cacheRequestUrl(asset), response),
-    cache.put(revisionKey(asset), new Response(asset.revision)),
-  ]);
+  const requestUrl = cacheRequestUrl(asset);
+  const markerUrl = revisionKey(asset);
+  await cache.delete(requestUrl);
+  await cache.delete(markerUrl);
+  try {
+    // Write the revision marker only after the complete response is safely in
+    // Cache Storage. Otherwise an interrupted network stream can leave a
+    // current marker beside a missing or partial package.
+    await cache.put(requestUrl, response);
+    await cache.put(markerUrl, new Response(asset.revision));
+  } catch (error) {
+    await Promise.all([cache.delete(requestUrl), cache.delete(markerUrl)]);
+    throw error;
+  }
 }
 
 async function matchingResponse(cache, asset) {
@@ -126,7 +137,50 @@ async function reusableResponse(cacheName, cache, asset) {
   return null;
 }
 
-async function fetchAndCache(cacheName, cache, asset, onBytes = () => {}, allowNetwork = true) {
+function retryDelay(attempt) {
+  return new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** (attempt - 1), 8000)));
+}
+
+async function downloadAsset(asset, onRetry = () => {}) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_ASSET_ATTEMPTS; attempt += 1) {
+    if (attempt > 1) await retryDelay(attempt - 1);
+    try {
+      const response = await fetch(revisionedAssetUrl(asset), { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      // Fully materialize and validate the decoded response before handing it
+      // to Cache Storage. This separates CDN/network failures from cache
+      // writes and prevents Cache.put() from consuming a broken live stream.
+      const payload = await response.blob();
+      if (asset.size && payload.size !== asset.size) {
+        throw new Error(`size mismatch: expected ${asset.size}, received ${payload.size}`);
+      }
+      const headers = new Headers(response.headers);
+      headers.delete("content-encoding");
+      headers.delete("content-length");
+      return new Response(payload, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_ASSET_ATTEMPTS) onRetry(asset, attempt + 1, error);
+    }
+  }
+  const reason = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`${asset.url}: failed after ${MAX_ASSET_ATTEMPTS} attempts (${reason})`);
+}
+
+async function fetchAndCache(
+  cacheName,
+  cache,
+  asset,
+  onBytes = () => {},
+  onRetry = () => {},
+  allowNetwork = true,
+) {
   const reusable = await reusableResponse(cacheName, cache, asset);
   if (reusable) {
     if (!reusable.alreadyCurrent) await cacheAsset(cache, asset, reusable.response.clone());
@@ -134,9 +188,7 @@ async function fetchAndCache(cacheName, cache, asset, onBytes = () => {}, allowN
     return true;
   }
   if (!allowNetwork) return false;
-  const response = await fetch(revisionedAssetUrl(asset), { cache: "no-store" });
-  if (!response.ok) throw new Error(`${asset.url}: HTTP ${response.status}`);
-  await cacheAsset(cache, asset, response);
+  await cacheAsset(cache, asset, await downloadAsset(asset, onRetry));
   onBytes(downloadSize(asset));
   return true;
 }
@@ -166,10 +218,21 @@ async function warmApplicationCache() {
     );
   };
 
-  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+  const onRetry = (asset, attempt, error) => {
+    const reason = error instanceof Error ? error.message : String(error);
+    showStatus(
+      "网络波动，正在重试资源……",
+      `${asset.url}（第 ${attempt}/${MAX_ASSET_ATTEMPTS} 次）· ${reason}`,
+      totalBytes === 0 ? 0 : completedBytes / totalBytes,
+    );
+  };
+
+  // Two concurrent transfers keep the browser responsive and avoid several
+  // large package streams competing on a constrained connection.
+  const workers = Array.from({ length: Math.min(2, queue.length) }, async () => {
     while (queue.length > 0) {
       const asset = queue.shift();
-      await fetchAndCache(manifest.cacheName, cache, asset, onBytes);
+      await fetchAndCache(manifest.cacheName, cache, asset, onBytes, onRetry);
     }
   });
   await Promise.all(workers);

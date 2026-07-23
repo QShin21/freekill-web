@@ -85,6 +85,12 @@ test("web packaging makes every package media pack a startup requirement", async
       bootstrap,
       /fetch\(revisionedAssetUrl\(asset\), \{ cache: "no-store" \}\)/,
     );
+    assert.match(bootstrap, /const MAX_ASSET_ATTEMPTS = 4/);
+    assert.match(bootstrap, /const payload = await response\.blob\(\)/);
+    assert.match(bootstrap, /payload\.size !== asset\.size/);
+    assert.match(bootstrap, /failed after \$\{MAX_ASSET_ATTEMPTS\} attempts/);
+    assert.match(bootstrap, /await cache\.put\(requestUrl, response\);\s*await cache\.put\(markerUrl/s);
+    assert.match(bootstrap, /Math\.min\(2, queue\.length\)/);
     assert.match(bootstrap, /loadScriptAsset\(manifest, "\/qtloader\.js"\)/);
     assert.match(bootstrap, /loadScriptAsset\(manifest, "\/FreeKill\.js"\)/);
     assert.match(bootstrap, /locateFile: locateRuntimeFile/);
