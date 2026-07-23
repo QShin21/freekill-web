@@ -284,6 +284,12 @@ async function loadQtApplication(context) {
   showStatus("正在启动 FreeKill……", "语音和大型动画将在进入游戏后于后台缓存。", null);
   await qtLoader({
     locateFile: locateRuntimeFile,
+    print(text) {
+      console.info(`[FreeKill] ${text}`);
+    },
+    printErr(text) {
+      console.error(`[FreeKill] ${text}`);
+    },
     qt: {
       entryFunction,
       containerElements: [screen],
