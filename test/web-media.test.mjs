@@ -143,6 +143,7 @@ test("the browser package manager seeds the exact bundled server database", asyn
   assert.match(source, /QFile::remove\(persistentDatabase\)/);
   assert.match(source, /QFile::copy\("\.\/packages\/packages\.db", persistentDatabase\)/);
   assert.match(source, /std::make_unique<Sqlite3>\(persistentDatabase/);
+  assert.match(source, /bool PackMan::shouldUseCore\(\) \{[\s\S]*return false;/);
 });
 
 test("the WebSocket overlay constructs Qt 6.8 CBOR errors explicitly", async () => {

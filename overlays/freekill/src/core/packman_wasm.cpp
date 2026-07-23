@@ -106,8 +106,11 @@ void PackMan::forceCheckoutMaster(const QString &) {}
 void PackMan::syncCommitHashToDatabase() {}
 
 bool PackMan::shouldUseCore() {
-  return QDir("packages/freekill-core").exists() &&
-         !disabled_packs.contains("freekill-core");
+  // Keep the authoritative package snapshot byte-identical to the server for
+  // calcFileMD5(). The browser-specific RootPage and login UI live in the
+  // prepared top-level Fk/lua runtime, so selecting the package copy here
+  // would either bypass that UI or require mutating an MD5-checked file.
+  return false;
 }
 
 int PackMan::clone(const QString &) { return -1; }
