@@ -133,6 +133,7 @@ test("static files include WebAssembly security and cache headers", async () => 
     assert.equal(compressed.status, 200);
     assert.equal(compressed.headers["content-type"], "application/wasm");
     assert.equal(compressed.headers["content-encoding"], "br");
+    assert.equal(compressed.headers["cache-control"], "public, max-age=2592000");
     assert.equal(compressed.headers.vary, "Accept-Encoding");
     assert.deepEqual(compressed.body, brotliCompressSync(wasm));
 

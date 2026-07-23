@@ -113,6 +113,8 @@ export function createStaticHandler(root) {
       ? "no-store"
       : /-[0-9a-f]{16}\.fkp$/i.test(name)
         ? "public, max-age=31536000, immutable"
+        : /\.(?:wasm|data)$/i.test(name)
+          ? "public, max-age=2592000"
         : "public, max-age=0, must-revalidate";
     const headers = {
       ...SECURITY_HEADERS,
