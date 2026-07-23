@@ -125,6 +125,7 @@ test("prepared sources migrate to split packages and merged Qt runtime exports",
   const temporary = await mkdtemp(join(tmpdir(), "freekill-web-source-"));
   const sourceDirectory = join(temporary, "FreeKill");
   const cmakePath = join(sourceDirectory, "src", "CMakeLists.txt");
+  const entryPath = join(sourceDirectory, "src", "freekill.cpp");
   const rootPagePath = join(sourceDirectory, "Fk", "Base", "RootPage.qml");
   const packagedRootPagePath = join(
     sourceDirectory,
@@ -157,17 +158,29 @@ endif()
   }
 }
 `;
+  const legacyEntry = `#define SHOW_SPLASH_MSG(msg)                                                   \\
+  splash.showMessage(msg, Qt::AlignHCenter | Qt::AlignBottom);
+
+void startClient() {
+  QSplashScreen splash(QPixmap("image/splash.jpg"));
+  splash.show();
+  splash.close();
+  int ret = app->exec();
+}
+`;
   try {
     await mkdir(dirname(cmakePath), { recursive: true });
     await mkdir(dirname(rootPagePath), { recursive: true });
     await mkdir(dirname(packagedRootPagePath), { recursive: true });
     await writeFile(cmakePath, legacy);
+    await writeFile(entryPath, legacyEntry);
     await writeFile(rootPagePath, legacyRootPage);
     await writeFile(packagedRootPagePath, legacyRootPage);
     const script = join(repositoryRoot, "scripts", "update-prepared-source.mjs");
     await exec(process.execPath, [script, "--free-kill", sourceDirectory]);
     await exec(process.execPath, [script, "--free-kill", sourceDirectory]);
     const migrated = await readFile(cmakePath, "utf8");
+    const migratedEntry = await readFile(entryPath, "utf8");
     const migratedRootPage = await readFile(rootPagePath, "utf8");
     const migratedPackagedRootPage = await readFile(packagedRootPagePath, "utf8");
     assert.match(migrated, /QT_WASM_EXTRA_EXPORTED_METHODS "addRunDependency,removeRunDependency"/);
@@ -177,6 +190,10 @@ endif()
     assert.match(migrated, /LINK_DEPENDS \$\{FK_WEB_PRELOAD_FILES\}/);
     assert.doesNotMatch(migrated, /client packages/);
     assert.equal((migrated.match(/EXPORTED_RUNTIME_METHODS/g) || []).length, 0);
+    assert.match(migratedEntry, /#ifdef Q_OS_WASM\n#define SHOW_SPLASH_MSG/);
+    assert.match(migratedEntry, /#ifndef Q_OS_WASM\n  QSplashScreen splash/);
+    assert.match(migratedEntry, /#ifndef Q_OS_WASM\n  splash\.close\(\);/);
+    assert.equal((migratedEntry.match(/QSplashScreen splash/g) || []).length, 1);
     assert.match(migratedRootPage, /function pushLoadedComponent\(component, label, onReady\)/);
     assert.match(migratedRootPage, /function loadInitialPage\(\)/);
     assert.match(migratedRootPage, /component\.status === Component\.Loading/);

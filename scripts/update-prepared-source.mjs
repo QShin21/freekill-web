@@ -170,6 +170,32 @@ const immediateInitialPagePush = `    mainStack.push(Qt.createComponent("Fk.Page
     }
 `;
 
+const nativeSplashMacro = `#define SHOW_SPLASH_MSG(msg)                                                   \\
+  splash.showMessage(msg, Qt::AlignHCenter | Qt::AlignBottom);`;
+
+const webSplashMacro = `#ifdef Q_OS_WASM
+#define SHOW_SPLASH_MSG(msg) do { } while (false)
+#else
+#define SHOW_SPLASH_MSG(msg)                                                   \\
+  splash.showMessage(msg, Qt::AlignHCenter | Qt::AlignBottom);
+#endif`;
+
+const nativeSplashWindow = `  QSplashScreen splash(QPixmap("image/splash.jpg"));
+  splash.show();`;
+
+const webSplashWindow = `#ifndef Q_OS_WASM
+  QSplashScreen splash(QPixmap("image/splash.jpg"));
+  splash.show();
+#endif`;
+
+const nativeSplashClose = `  splash.close();
+  int ret = app->exec();`;
+
+const webSplashClose = `#ifndef Q_OS_WASM
+  splash.close();
+#endif
+  int ret = app->exec();`;
+
 const options = argumentsFrom(process.argv.slice(2));
 const cmakePath = join(options.freeKill, "src", "CMakeLists.txt");
 const before = (await readFile(cmakePath, "utf8")).replaceAll("\r\n", "\n");
@@ -202,6 +228,29 @@ if (after === before) {
 } else {
   await writeFile(cmakePath, after);
   console.log("Updated prepared FreeKill source for incremental web media.");
+}
+
+const entryPath = join(options.freeKill, "src", "freekill.cpp");
+const entryBefore = (await readFile(entryPath, "utf8")).replaceAll("\r\n", "\n");
+let entryAfter = entryBefore;
+if (!entryAfter.includes("#define SHOW_SPLASH_MSG(msg) do { } while (false)")) {
+  for (const [legacy, replacement, label] of [
+    [nativeSplashMacro, webSplashMacro, "native splash macro"],
+    [nativeSplashWindow, webSplashWindow, "native splash window"],
+    [nativeSplashClose, webSplashClose, "native splash close"],
+  ]) {
+    const count = entryAfter.split(legacy).length - 1;
+    if (count !== 1) {
+      throw new Error(`Expected one ${label} in ${entryPath}, found ${count}`);
+    }
+    entryAfter = entryAfter.replace(legacy, replacement);
+  }
+}
+if (entryAfter === entryBefore) {
+  console.log("Prepared FreeKill browser splash handling is current.");
+} else {
+  await writeFile(entryPath, entryAfter);
+  console.log("Disabled the native FreeKill splash window in browsers.");
 }
 
 const rootPagePaths = [

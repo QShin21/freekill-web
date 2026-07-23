@@ -197,6 +197,37 @@ async function patchFreekillEntry(freeKill) {
       "  QString system;\n#if defined(Q_OS_WASM)\n  system = QStringLiteral(\"Web\");\n#elif defined(Q_OS_ANDROID)",
       "Web OS name",
     );
+    output = replaceOnce(
+      output,
+      `#define SHOW_SPLASH_MSG(msg)                                                   \\
+  splash.showMessage(msg, Qt::AlignHCenter | Qt::AlignBottom);`,
+      `#ifdef Q_OS_WASM
+#define SHOW_SPLASH_MSG(msg) do { } while (false)
+#else
+#define SHOW_SPLASH_MSG(msg)                                                   \\
+  splash.showMessage(msg, Qt::AlignHCenter | Qt::AlignBottom);
+#endif`,
+      "browser native splash messages",
+    );
+    output = replaceOnce(
+      output,
+      `  QSplashScreen splash(QPixmap("image/splash.jpg"));
+  splash.show();`,
+      `#ifndef Q_OS_WASM
+  QSplashScreen splash(QPixmap("image/splash.jpg"));
+  splash.show();
+#endif`,
+      "browser native splash window",
+    );
+    output = replaceOnce(
+      output,
+      "  splash.close();\n  int ret = app->exec();",
+      `#ifndef Q_OS_WASM
+  splash.close();
+#endif
+  int ret = app->exec();`,
+      "browser native splash close",
+    );
     return output;
   });
 }
