@@ -18,7 +18,7 @@ const oldPreload = `  foreach(resource_dir IN ITEMS audio fonts image lua Fk cli
   endforeach()
 `;
 
-const splitPreload = `  foreach(resource_dir IN ITEMS audio fonts image lua ltk Fk LunarLtk client)
+const splitPreload = `  foreach(resource_dir IN ITEMS audio fonts image lua ltk Fk LunarLtk Qt5Compat client)
     target_link_options(FreeKill PRIVATE
       "SHELL:--preload-file \\"\${PROJECT_SOURCE_DIR}/\${resource_dir}@/\${resource_dir}\\"")
   endforeach()
@@ -30,11 +30,18 @@ const splitPreload = `  foreach(resource_dir IN ITEMS audio fonts image lua ltk 
 
 const legacySplitDirectories =
   "  foreach(resource_dir IN ITEMS audio fonts image lua Fk client)";
-const splitDirectories =
+const previousSplitDirectories =
   "  foreach(resource_dir IN ITEMS audio fonts image lua ltk Fk LunarLtk client)";
+const splitDirectories =
+  "  foreach(resource_dir IN ITEMS audio fonts image lua ltk Fk LunarLtk Qt5Compat client)";
 const legacyTrackedRuntimeDirectories = `    "\${PROJECT_SOURCE_DIR}/lua/*"
     "\${PROJECT_SOURCE_DIR}/Fk/*"`;
 const trackedRuntimeDirectories = `    "\${PROJECT_SOURCE_DIR}/lua/*"
+    "\${PROJECT_SOURCE_DIR}/ltk/*"
+    "\${PROJECT_SOURCE_DIR}/Fk/*"
+    "\${PROJECT_SOURCE_DIR}/LunarLtk/*"
+    "\${PROJECT_SOURCE_DIR}/Qt5Compat/*"`;
+const previousTrackedRuntimeDirectories = `    "\${PROJECT_SOURCE_DIR}/lua/*"
     "\${PROJECT_SOURCE_DIR}/ltk/*"
     "\${PROJECT_SOURCE_DIR}/Fk/*"
     "\${PROJECT_SOURCE_DIR}/LunarLtk/*"`;
@@ -48,6 +55,7 @@ const trackedPreloadDependencies = `  file(GLOB_RECURSE FK_WEB_PRELOAD_FILES CON
     "\${PROJECT_SOURCE_DIR}/ltk/*"
     "\${PROJECT_SOURCE_DIR}/Fk/*"
     "\${PROJECT_SOURCE_DIR}/LunarLtk/*"
+    "\${PROJECT_SOURCE_DIR}/Qt5Compat/*"
     "\${PROJECT_SOURCE_DIR}/client/*"
     "\${FK_WEB_PACKAGES_DIR}/*"
   )
@@ -308,8 +316,10 @@ if (!after.includes("set(FK_WEB_PACKAGES_DIR")) {
 // Upgrade source trees prepared by an earlier web build as well as pristine
 // upstream trees. The server reuses this directory between incremental builds.
 after = after.replace(legacySplitDirectories, splitDirectories);
+after = after.replace(previousSplitDirectories, splitDirectories);
 if (after.includes("FK_WEB_PRELOAD_FILES")) {
   after = after.replace(legacyTrackedRuntimeDirectories, trackedRuntimeDirectories);
+  after = after.replace(previousTrackedRuntimeDirectories, trackedRuntimeDirectories);
 }
 if (!after.includes("FK_WEB_PRELOAD_FILES")) {
   const count = after.split(splitPreload).length - 1;
@@ -317,6 +327,21 @@ if (!after.includes("FK_WEB_PRELOAD_FILES")) {
     throw new Error(`Expected one split preload block in ${cmakePath}, found ${count}`);
   }
   after = after.replace(splitPreload, splitPreload + trackedPreloadDependencies);
+}
+if (!after.includes("Qt6::effectsplugin")) {
+  const oldQtWebSocketLibraries = `if (EMSCRIPTEN)
+  list(APPEND QT_LIB Qt6::WebSockets)
+endif()`;
+  const webEffectLibraries = `if (EMSCRIPTEN)
+  find_package(Qt6effectsplugin REQUIRED
+    PATHS "\${Qt6Qml_DIR}/QmlPlugins" NO_DEFAULT_PATH)
+  list(APPEND QT_LIB Qt6::WebSockets Qt6::effectsplugin)
+endif()`;
+  const count = after.split(oldQtWebSocketLibraries).length - 1;
+  if (count !== 1) {
+    throw new Error(`Expected one WebSocket Qt library block in ${cmakePath}, found ${count}`);
+  }
+  after = after.replace(oldQtWebSocketLibraries, webEffectLibraries);
 }
 if (after.includes(invalidRuntimeExports)) {
   after = after.replace(invalidRuntimeExports, mergedRuntimeExports);

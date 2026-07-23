@@ -115,8 +115,8 @@ test("the Wasm build reapplies web overlays after extra packages", async () => {
   const reapplySourceOverlays = buildScript.indexOf(
     'cp -R "${repo_root}/overlays/freekill/src/." "${free_kill_source}/src/"',
   );
-  const reapplyQmlOverlays = buildScript.indexOf(
-    'cp -R "${repo_root}/overlays/freekill/Fk/." "${free_kill_source}/Fk/"',
+  const reapplyRuntimeOverlays = buildScript.indexOf(
+    "for runtime_overlay in Fk Qt5Compat; do",
   );
   const prepareWebMedia = buildScript.indexOf(
     'node "${repo_root}/scripts/prepare-web-media.mjs"',
@@ -128,15 +128,16 @@ test("the Wasm build reapplies web overlays after extra packages", async () => {
     /rm -rf "\$\{free_kill_source:\?\}\/packages"[\s\S]*tar --exclude='\.git'/,
   );
   assert.ok(reapplySourceOverlays > extraPackages);
-  assert.ok(reapplyQmlOverlays > extraPackages);
+  assert.ok(reapplyRuntimeOverlays > extraPackages);
   assert.ok(updatePreparedSource > reapplySourceOverlays);
-  assert.ok(updatePreparedSource > reapplyQmlOverlays);
+  assert.ok(updatePreparedSource > reapplyRuntimeOverlays);
   assert.ok(updatePreparedSource > extraPackages);
   assert.ok(prepareWebMedia > updatePreparedSource);
   assert.match(
     buildScript,
     /for core_directory in Fk LunarLtk lua ltk; do/,
   );
+  assert.match(buildScript, /for runtime_overlay in Fk Qt5Compat; do/);
 });
 
 test("the browser package manager seeds the exact bundled server database", async () => {
@@ -159,6 +160,29 @@ test("the WebSocket overlay constructs Qt 6.8 CBOR errors explicitly", async () 
   assert.match(source, /QCborError\{QCborError::IllegalType\}/);
   assert.match(source, /QCborError\{QCborError::UnknownError\}/);
   assert.match(source, /QCborError\{QCborError::NoError\}/);
+});
+
+test("the browser supplies Qt 5 graphical-effect compatibility via Qt 6 effects", async () => {
+  const compatibilityRoot = join(
+    repositoryRoot,
+    "overlays",
+    "freekill",
+    "Qt5Compat",
+    "GraphicalEffects",
+  );
+  const moduleDefinition = await readFile(join(compatibilityRoot, "qmldir"), "utf8");
+  const effectFiles = [
+    "ColorOverlay.qml",
+    "DropShadow.qml",
+    "FastBlur.qml",
+    "Glow.qml",
+    "OpacityMask.qml",
+  ];
+  assert.match(moduleDefinition, /module Qt5Compat\.GraphicalEffects/);
+  for (const filename of effectFiles) {
+    assert.match(moduleDefinition, new RegExp(filename.replace(".", "\\.")));
+    assert.match(await readFile(join(compatibilityRoot, filename), "utf8"), /QtQuick\.Effects/);
+  }
 });
 
 test("the browser opens a deployment-configured username and password login", async () => {
@@ -219,6 +243,11 @@ test("prepared sources migrate to split packages and merged Qt runtime exports",
     target_link_options(FreeKill PRIVATE
       "SHELL:--preload-file \\"\${PROJECT_SOURCE_DIR}/\${resource_dir}@/\${resource_dir}\\"")
   endforeach()
+endif()
+
+set(QT_LIB Qt6::Network)
+if (EMSCRIPTEN)
+  list(APPEND QT_LIB Qt6::WebSockets)
 endif()
 `;
   const legacyRootPage = `Item {
@@ -293,9 +322,12 @@ void startClient() {
     assert.match(migrated, /set\(FK_WEB_PACKAGES_DIR/);
     assert.match(migrated, /file\(GLOB_RECURSE FK_WEB_PRELOAD_FILES CONFIGURE_DEPENDS/);
     assert.match(migrated, /LINK_DEPENDS \$\{FK_WEB_PRELOAD_FILES\}/);
-    assert.match(migrated, /IN ITEMS audio fonts image lua ltk Fk LunarLtk client/);
+    assert.match(migrated, /IN ITEMS audio fonts image lua ltk Fk LunarLtk Qt5Compat client/);
     assert.match(migrated, /PROJECT_SOURCE_DIR}\/ltk\/\*/);
     assert.match(migrated, /PROJECT_SOURCE_DIR}\/LunarLtk\/\*/);
+    assert.match(migrated, /PROJECT_SOURCE_DIR}\/Qt5Compat\/\*/);
+    assert.match(migrated, /find_package\(Qt6effectsplugin REQUIRED/);
+    assert.match(migrated, /Qt6::WebSockets Qt6::effectsplugin/);
     assert.doesNotMatch(migrated, /client packages/);
     assert.equal((migrated.match(/EXPORTED_RUNTIME_METHODS/g) || []).length, 0);
     assert.match(migratedEntry, /#ifdef Q_OS_WASM\n#define SHOW_SPLASH_MSG/);
@@ -326,20 +358,22 @@ void startClient() {
 
     const previousMigration = migrated
       .replace(
-        "IN ITEMS audio fonts image lua ltk Fk LunarLtk client",
+        "IN ITEMS audio fonts image lua ltk Fk LunarLtk Qt5Compat client",
         "IN ITEMS audio fonts image lua Fk client",
       )
       .replace('    "${PROJECT_SOURCE_DIR}/ltk/*"\n', "")
-      .replace('    "${PROJECT_SOURCE_DIR}/LunarLtk/*"\n', "");
+      .replace('    "${PROJECT_SOURCE_DIR}/LunarLtk/*"\n', "")
+      .replace('    "${PROJECT_SOURCE_DIR}/Qt5Compat/*"\n', "");
     await writeFile(cmakePath, previousMigration);
     await exec(process.execPath, [script, "--free-kill", sourceDirectory]);
     const upgradedMigration = await readFile(cmakePath, "utf8");
     assert.match(
       upgradedMigration,
-      /IN ITEMS audio fonts image lua ltk Fk LunarLtk client/,
+      /IN ITEMS audio fonts image lua ltk Fk LunarLtk Qt5Compat client/,
     );
     assert.match(upgradedMigration, /PROJECT_SOURCE_DIR}\/ltk\/\*/);
     assert.match(upgradedMigration, /PROJECT_SOURCE_DIR}\/LunarLtk\/\*/);
+    assert.match(upgradedMigration, /PROJECT_SOURCE_DIR}\/Qt5Compat\/\*/);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

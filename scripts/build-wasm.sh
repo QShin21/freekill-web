@@ -93,9 +93,13 @@ fi
 # Never apply QML runtime fixes to the package snapshot: calcFileMD5() must see
 # byte-identical server scripts even when the browser UI needs different code.
 cp -R "${repo_root}/overlays/freekill/src/." "${free_kill_source}/src/"
-if [[ -d "${repo_root}/overlays/freekill/Fk" ]]; then
-  cp -R "${repo_root}/overlays/freekill/Fk/." "${free_kill_source}/Fk/"
-fi
+for runtime_overlay in Fk Qt5Compat; do
+  if [[ -d "${repo_root}/overlays/freekill/${runtime_overlay}" ]]; then
+    mkdir -p "${free_kill_source}/${runtime_overlay}"
+    cp -R "${repo_root}/overlays/freekill/${runtime_overlay}/." \
+      "${free_kill_source}/${runtime_overlay}/"
+  fi
+done
 node "${repo_root}/scripts/update-prepared-source.mjs" \
   --free-kill "${free_kill_source}"
 
