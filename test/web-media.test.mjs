@@ -190,6 +190,7 @@ test("prepared sources migrate to split packages and merged Qt runtime exports",
   const cmakePath = join(sourceDirectory, "src", "CMakeLists.txt");
   const entryPath = join(sourceDirectory, "src", "freekill.cpp");
   const rootPagePath = join(sourceDirectory, "Fk", "Base", "RootPage.qml");
+  const luaEntryPath = join(sourceDirectory, "lua", "freekill.lua");
   const packagedRootPagePath = join(
     sourceDirectory,
     "packages",
@@ -197,6 +198,13 @@ test("prepared sources migrate to split packages and merged Qt runtime exports",
     "Fk",
     "Base",
     "RootPage.qml",
+  );
+  const packagedLuaEntryPath = join(
+    sourceDirectory,
+    "packages",
+    "freekill-core",
+    "lua",
+    "freekill.lua",
   );
   const qmlBackendHeaderPath = join(sourceDirectory, "src", "ui", "qmlbackend.h");
   const qmlBackendPath = join(sourceDirectory, "src", "ui", "qmlbackend.cpp");
@@ -229,6 +237,10 @@ endif()
   }
 }
 `;
+  const legacyLuaEntry = `Fk = Engine:new()
+dofile "ltk/init.lua"
+Fk:loadPackages()
+`;
   const legacyQmlBackendHeader = `class QmlBackend {
   Q_INVOKABLE QString loadTips();
 };
@@ -254,11 +266,15 @@ void startClient() {
     await mkdir(dirname(cmakePath), { recursive: true });
     await mkdir(dirname(rootPagePath), { recursive: true });
     await mkdir(dirname(packagedRootPagePath), { recursive: true });
+    await mkdir(dirname(luaEntryPath), { recursive: true });
+    await mkdir(dirname(packagedLuaEntryPath), { recursive: true });
     await mkdir(dirname(qmlBackendHeaderPath), { recursive: true });
     await writeFile(cmakePath, legacy);
     await writeFile(entryPath, legacyEntry);
     await writeFile(rootPagePath, legacyRootPage);
     await writeFile(packagedRootPagePath, legacyRootPage);
+    await writeFile(luaEntryPath, legacyLuaEntry);
+    await writeFile(packagedLuaEntryPath, legacyLuaEntry);
     await writeFile(qmlBackendHeaderPath, legacyQmlBackendHeader);
     await writeFile(qmlBackendPath, legacyQmlBackend);
     const script = join(repositoryRoot, "scripts", "update-prepared-source.mjs");
@@ -268,6 +284,8 @@ void startClient() {
     const migratedEntry = await readFile(entryPath, "utf8");
     const migratedRootPage = await readFile(rootPagePath, "utf8");
     const migratedPackagedRootPage = await readFile(packagedRootPagePath, "utf8");
+    const migratedLuaEntry = await readFile(luaEntryPath, "utf8");
+    const migratedPackagedLuaEntry = await readFile(packagedLuaEntryPath, "utf8");
     const migratedQmlBackendHeader = await readFile(qmlBackendHeaderPath, "utf8");
     const migratedQmlBackend = await readFile(qmlBackendPath, "utf8");
     assert.match(migrated, /QT_WASM_EXTRA_EXPORTED_METHODS "addRunDependency,removeRunDependency"/);
@@ -299,6 +317,8 @@ void startClient() {
       /mainStack\.push\(Qt\.createComponent\("Fk\.Pages\.Common", "Init"\)\)/,
     );
     assert.equal(migratedPackagedRootPage, legacyRootPage);
+    assert.match(migratedLuaEntry, /UsingNewCore = true\nFk:loadPackages\(\)/);
+    assert.equal(migratedPackagedLuaEntry, legacyLuaEntry);
     assert.match(migratedQmlBackendHeader, /configuredServerAddress\(\) const/);
     assert.match(migratedQmlBackendHeader, /configuredServerPort\(\) const/);
     assert.match(migratedQmlBackend, /WebPlatform::serverAddress\(\)/);

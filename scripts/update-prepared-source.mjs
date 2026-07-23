@@ -282,6 +282,18 @@ const webSplashClose = `#ifndef Q_OS_WASM
 #endif
   int ret = app->exec();`;
 
+const luaCoreLoad = `Fk = Engine:new()
+dofile "ltk/init.lua"
+Fk:loadPackages()`;
+
+const webLuaCoreLoad = `Fk = Engine:new()
+dofile "ltk/init.lua"
+-- The browser boots its QML from the top-level runtime so the login flow can
+-- differ from desktop. Its Lua packages must still use the matching modern
+-- built-ins bundled inside freekill-core, exactly like a native client does.
+UsingNewCore = true
+Fk:loadPackages()`;
+
 const options = argumentsFrom(process.argv.slice(2));
 const cmakePath = join(options.freeKill, "src", "CMakeLists.txt");
 const before = (await readFile(cmakePath, "utf8")).replaceAll("\r\n", "\n");
@@ -343,6 +355,21 @@ if (entryAfter === entryBefore) {
 } else {
   await writeFile(entryPath, entryAfter);
   console.log("Disabled the native FreeKill splash window in browsers.");
+}
+
+const luaEntryPath = join(options.freeKill, "lua", "freekill.lua");
+const luaEntryBefore = (await readFile(luaEntryPath, "utf8")).replaceAll("\r\n", "\n");
+let luaEntryAfter = luaEntryBefore;
+if (!luaEntryAfter.includes("UsingNewCore = true")) {
+  const count = luaEntryAfter.split(luaCoreLoad).length - 1;
+  if (count !== 1) {
+    throw new Error(`Expected one Lua core load block in ${luaEntryPath}, found ${count}`);
+  }
+  luaEntryAfter = luaEntryAfter.replace(luaCoreLoad, webLuaCoreLoad);
+}
+if (luaEntryAfter !== luaEntryBefore) {
+  await writeFile(luaEntryPath, luaEntryAfter);
+  console.log("Enabled the matching modern Lua core for the browser runtime.");
 }
 
 const qmlBackendHeaderPath = join(options.freeKill, "src", "ui", "qmlbackend.h");
