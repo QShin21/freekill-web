@@ -61,6 +61,16 @@ test("web packaging marks media packs as deferred downloads", async () => {
       bootstrap,
       /fetch\(revisionedAssetUrl\(asset\), \{ cache: "no-store" \}\)/,
     );
+    assert.match(bootstrap, /loadScriptAsset\(manifest, "\/qtloader\.js"\)/);
+    assert.match(bootstrap, /loadScriptAsset\(manifest, "\/FreeKill\.js"\)/);
+
+    const index = await readFile(join(output, "index.html"), "utf8");
+    assert.doesNotMatch(index, /<script src="(?:qtloader|FreeKill)/);
+    assert.match(index, /<script type="module" src="bootstrap\.js\?v=2"><\/script>/);
+
+    const serviceWorker = await readFile(join(output, "service-worker.js"), "utf8");
+    assert.doesNotMatch(serviceWorker, /"\/FreeKill(?:\.worker)?\.js"/);
+    assert.doesNotMatch(serviceWorker, /"\/qtloader\.js"/);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

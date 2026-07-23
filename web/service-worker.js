@@ -6,9 +6,6 @@ const NETWORK_FIRST = new Set([
   "/asset-manifest.json",
   "/bootstrap.js",
   "/media-pack.js",
-  "/FreeKill.js",
-  "/FreeKill.worker.js",
-  "/qtloader.js",
   "/styles.css",
   "/manifest.webmanifest",
 ]);

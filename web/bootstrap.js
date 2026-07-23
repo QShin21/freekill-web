@@ -63,6 +63,33 @@ function revisionedAssetUrl(asset) {
   return url.href;
 }
 
+function manifestAsset(manifest, url) {
+  const asset = manifest.assets.find((candidate) => candidate.url === url);
+  if (!asset) throw new Error(`Missing asset metadata for ${url}`);
+  return asset;
+}
+
+function loadScriptAsset(manifest, url) {
+  const asset = manifestAsset(manifest, url);
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = revisionedAssetUrl(asset);
+    script.async = false;
+    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener(
+      "error",
+      () => reject(new Error(`Unable to load ${url} revision ${asset.revision}`)),
+      { once: true },
+    );
+    document.head.append(script);
+  });
+}
+
+async function loadQtRuntime(manifest) {
+  await loadScriptAsset(manifest, "/qtloader.js");
+  await loadScriptAsset(manifest, "/FreeKill.js");
+}
+
 async function cacheAsset(cache, asset, response) {
   await Promise.all([
     cache.put(asset.url, response),
@@ -294,6 +321,7 @@ async function start() {
   try {
     await Promise.all([loadConfiguration(), registerServiceWorker()]);
     const context = await warmApplicationCache();
+    await loadQtRuntime(context.manifest);
     await loadQtApplication(context);
   } catch (error) {
     console.error(error);
