@@ -33,3 +33,20 @@ test("the standalone reverse proxy emits one copy of each security header", asyn
     );
   }
 });
+
+test("the standalone reverse proxy accepts the direct WebSocket hostname", async () => {
+  const config = await readFile(
+    resolve(repositoryRoot, "deployment", "nginx-freekill.conf"),
+    "utf8",
+  );
+
+  assert.equal(
+    [
+      ...config.matchAll(
+        /\bserver_name\s+zijing\.yejiaxin\.online\s+ws\.zijing\.yejiaxin\.online;/g,
+      ),
+    ].length,
+    2,
+    "both the HTTP redirect and HTTPS server must accept the direct WSS host",
+  );
+});
