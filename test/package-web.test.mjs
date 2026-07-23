@@ -87,6 +87,9 @@ test("web packaging marks media packs as deferred downloads", async () => {
     const serviceWorker = await readFile(join(output, "service-worker.js"), "utf8");
     assert.doesNotMatch(serviceWorker, /"\/FreeKill(?:\.worker)?\.js"/);
     assert.doesNotMatch(serviceWorker, /"\/qtloader\.js"/);
+
+    const styles = await readFile(join(output, "styles.css"), "utf8");
+    assert.match(styles, /#screen canvas\s*\{[^}]*width: 100%;[^}]*height: 100%;/s);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
