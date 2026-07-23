@@ -149,8 +149,6 @@ if (webMediaDirectory) {
   }
 }
 
-const deferredUrls = new Set(deferredPacks.map((pack) => pack.url));
-
 const candidates = (await listFiles(outputDirectory)).filter(
   (path) =>
     basename(path) !== "asset-manifest.json" &&
@@ -170,13 +168,16 @@ for (const path of candidates) {
     size: info.size,
     downloadSize: (await exists(compressedPath)) ? (await stat(compressedPath)).size : info.size,
     revision: digest(contents).slice(0, 16),
-    startup: !deferredUrls.has(publicPath(path)),
+    // Package media is split into .fkp files to keep the Emscripten data file
+    // manageable, but every pack is required before the game starts so the
+    // browser and server see byte-identical package trees during MD5 checks.
+    startup: true,
   });
 }
 assets.sort((left, right) => left.url.localeCompare(right.url));
 
 // CDN configurations often ignore query parameters when constructing their
-// cache key. Publish startup artifacts under revision-specific paths so two
+// cache key. Publish all required artifacts under revision-specific paths so two
 // releases can never be mixed even when different edge nodes retain old data.
 for (const asset of assets.filter((candidate) => candidate.startup !== false)) {
   const source = join(outputDirectory, asset.url.replace(/^\/+/, ""));
@@ -208,10 +209,7 @@ await writeFile(
 const startupBytes = assets
   .filter((asset) => asset.startup)
   .reduce((sum, asset) => sum + asset.downloadSize, 0);
-const deferredBytes = assets
-  .filter((asset) => !asset.startup)
-  .reduce((sum, asset) => sum + asset.downloadSize, 0);
 console.log(
-  `Packaged ${assets.length} files (${startupBytes} startup bytes, ` +
-    `${deferredBytes} deferred bytes) in ${outputDirectory}`,
+  `Packaged ${assets.length} required files (${startupBytes} download bytes) ` +
+    `in ${outputDirectory}`,
 );

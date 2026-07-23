@@ -67,6 +67,11 @@ if [[ -n "${EXTRA_PACKAGES_DIR:-}" ]]; then
     echo "EXTRA_PACKAGES_DIR does not exist: ${EXTRA_PACKAGES_DIR}" >&2
     exit 1
   fi
+  # The game server's package directory is authoritative. Replace the prepared
+  # package tree instead of overlaying it so removed/renamed extensions cannot
+  # survive from an older web build and alter the client package summary.
+  rm -rf "${free_kill_source:?}/packages"
+  mkdir -p "${free_kill_source}/packages"
   (cd "${EXTRA_PACKAGES_DIR}" && tar --exclude='.git' -cf - .) | \
     (cd "${free_kill_source}/packages" && tar -xf -)
   if [[ -d "${EXTRA_PACKAGES_DIR}/freekill-core" ]]; then

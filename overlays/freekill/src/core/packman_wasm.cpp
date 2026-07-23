@@ -16,10 +16,20 @@ QString sqlQuoted(QString value) {
 } // namespace
 
 PackMan::PackMan(QObject *parent) : QObject(parent) {
-  QDir().mkpath(WebPlatform::persistentPath("packages"));
-  db = std::make_unique<Sqlite3>(
-      WebPlatform::persistentPath("packages/packages.db"),
-      "./packages/init.sql");
+  const auto persistentPackages = WebPlatform::persistentPath("packages");
+  const auto persistentDatabase = persistentPackages + "/packages.db";
+  QDir().mkpath(persistentPackages);
+
+  // The browser cannot use git to discover package revisions. Seed the
+  // persistent database from the exact server-side package snapshot embedded
+  // in this build on every launch. This also repairs databases created by
+  // older web builds before the package rows were bundled.
+  if (QFile::exists(persistentDatabase) && !QFile::remove(persistentDatabase))
+    qFatal("Cannot replace the browser package database");
+  if (!QFile::copy("./packages/packages.db", persistentDatabase))
+    qFatal("Cannot initialize the browser package database");
+
+  db = std::make_unique<Sqlite3>(persistentDatabase, "./packages/init.sql");
 
   for (const auto &obj : db->select("SELECT name, enabled FROM packages;")) {
     if (obj["enabled"].toInt() != 1) disabled_packs << obj["name"];

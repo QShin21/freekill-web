@@ -151,11 +151,10 @@ async function warmApplicationCache() {
   }
 
   const cache = await caches.open(manifest.cacheName);
-  const startupAssets = manifest.assets.filter((asset) => asset.startup !== false);
-  const deferredAssets = manifest.assets.filter((asset) => asset.startup === false);
-  const totalBytes = startupAssets.reduce((sum, asset) => sum + downloadSize(asset), 0);
+  const requiredAssets = manifest.assets;
+  const totalBytes = requiredAssets.reduce((sum, asset) => sum + downloadSize(asset), 0);
   let completedBytes = 0;
-  const queue = [...startupAssets];
+  const queue = [...requiredAssets];
 
   const onBytes = (bytes) => {
     completedBytes += bytes;
@@ -175,10 +174,6 @@ async function warmApplicationCache() {
   });
   await Promise.all(workers);
 
-  // Preserve unchanged deferred packs before removing an older build cache.
-  for (const asset of deferredAssets) {
-    await fetchAndCache(manifest.cacheName, cache, asset, undefined, false);
-  }
   const existing = await caches.keys();
   await Promise.all(
     existing
@@ -274,43 +269,30 @@ async function mountMediaResponse(runtime, manifest, pack, response) {
   const count = unpackMediaPack(runtime.FS, await response.arrayBuffer());
   mountedMediaPacks.add(key);
   mediaStatus(manifest, "mounted", pack);
-  console.info(`Mounted ${count} deferred media files from ${pack.id}`);
+  console.info(`Mounted ${count} required media files from ${pack.id}`);
 }
 
-async function mountCachedMedia(runtime, context) {
-  if (!context.cache) return;
-  for (const pack of context.manifest.deferredPacks || []) {
-    const response = await context.cache.match(pack.url);
-    if (response) await mountMediaResponse(runtime, context.manifest, pack, response);
+async function requiredMediaResponse(context, pack) {
+  const asset = context.manifest.assets.find((candidate) => candidate.url === pack.url);
+  if (!asset) throw new Error(`Missing required media asset metadata: ${pack.url}`);
+  if (context.cache) {
+    const response = await matchingResponse(context.cache, asset);
+    if (!response) throw new Error(`Required media pack is not cached: ${pack.url}`);
+    return response;
   }
+  const response = await fetch(revisionedAssetUrl(asset), { cache: "no-store" });
+  if (!response.ok) throw new Error(`${pack.url}: HTTP ${response.status}`);
+  return response;
 }
 
-async function downloadDeferredMedia(runtime, context) {
-  const packs = context.manifest.deferredPacks || [];
-  if (packs.length === 0) return;
-  const assets = new Map(context.manifest.assets.map((asset) => [asset.url, asset]));
-  mediaStatus(context.manifest, "downloading");
-
-  for (const pack of packs) {
-    const key = `${pack.id}:${pack.revision}`;
-    if (mountedMediaPacks.has(key)) continue;
-    try {
-      let response;
-      if (context.cache) {
-        const asset = assets.get(pack.url);
-        if (!asset) throw new Error(`Missing asset metadata for ${pack.url}`);
-        await fetchAndCache(context.manifest.cacheName, context.cache, asset);
-        response = await context.cache.match(pack.url);
-      } else {
-        response = await fetch(pack.url, { cache: "no-store" });
-        if (!response.ok) throw new Error(`${pack.url}: HTTP ${response.status}`);
-      }
-      if (!response) throw new Error(`Unable to read cached media pack: ${pack.url}`);
-      await mountMediaResponse(runtime, context.manifest, pack, response);
-    } catch (error) {
-      console.warn(`Unable to load deferred media pack ${pack.id}`, error);
-      mediaStatus(context.manifest, "error", pack, error);
-    }
+async function mountRequiredMedia(runtime, context) {
+  for (const pack of context.manifest.deferredPacks || []) {
+    await mountMediaResponse(
+      runtime,
+      context.manifest,
+      pack,
+      await requiredMediaResponse(context, pack),
+    );
   }
   mediaStatus(context.manifest, "ready");
 }
@@ -341,8 +323,7 @@ async function loadQtApplication(context) {
     return asset ? revisionedAssetUrl(asset) : filename;
   };
 
-  let runtimeModule;
-  showStatus("正在启动 FreeKill……", "语音和大型动画将在进入游戏后于后台缓存。", null);
+  showStatus("正在启动 FreeKill……", "正在挂载完整扩展包（含图片和音频）。", null);
   await qtLoader({
     locateFile: locateRuntimeFile,
     print(text) {
@@ -358,7 +339,6 @@ async function loadQtApplication(context) {
         fitQtCanvasesToWindows();
         document.body.dataset.state = "ready";
         loading.setAttribute("aria-hidden", "true");
-        if (runtimeModule) void downloadDeferredMedia(runtimeModule, context);
       },
       onExit(exitData) {
         document.body.dataset.state = "error";
@@ -369,7 +349,6 @@ async function loadQtApplication(context) {
     preRun: [
       function mountPersistentStorage(module) {
         const runtime = module || this;
-        runtimeModule = runtime;
         const { FS, addRunDependency, removeRunDependency } = runtime;
         const IDBFS = FS?.filesystems?.IDBFS;
         if (!FS || !IDBFS) return;
@@ -381,15 +360,25 @@ async function loadQtApplication(context) {
           removeRunDependency("freekill-idbfs");
         });
       },
-      function mountDeferredMedia(module) {
+      function mountCompletePackageMedia(module) {
         const runtime = module || this;
-        runtimeModule = runtime;
-        if (!context.cache || !(context.manifest.deferredPacks || []).length) return;
-        const dependency = "freekill-cached-media";
+        if (!(context.manifest.deferredPacks || []).length) return;
+        const dependency = "freekill-required-media";
         runtime.addRunDependency(dependency);
-        void mountCachedMedia(runtime, context)
-          .catch((error) => console.warn("Unable to mount cached media", error))
-          .finally(() => runtime.removeRunDependency(dependency));
+        void mountRequiredMedia(runtime, context).then(
+          () => runtime.removeRunDependency(dependency),
+          (error) => {
+            console.error("Unable to mount required package media", error);
+            mediaStatus(context.manifest, "error", null, error);
+            document.body.dataset.state = "error";
+            showStatus(
+              "无法加载完整扩展包",
+              error instanceof Error ? error.message : String(error),
+              0,
+            );
+            retry.hidden = false;
+          },
+        );
       },
     ],
   });

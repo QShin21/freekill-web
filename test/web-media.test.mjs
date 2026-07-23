@@ -37,7 +37,7 @@ function memoryFileSystem() {
   };
 }
 
-test("deferred media is split per package and can be mounted", async () => {
+test("required media is split per package and can be mounted before startup", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "freekill-web-media-"));
   const packages = join(temporary, "packages");
   const output = join(temporary, "output");
@@ -117,8 +117,22 @@ test("the Wasm build reapplies web overlays after extra packages", async () => {
   );
 
   assert.ok(extraPackages >= 0);
+  assert.match(
+    buildScript,
+    /rm -rf "\$\{free_kill_source:\?\}\/packages"[\s\S]*tar --exclude='\.git'/,
+  );
   assert.ok(updatePreparedSource > extraPackages);
   assert.ok(prepareWebMedia > updatePreparedSource);
+});
+
+test("the browser package manager seeds the exact bundled server database", async () => {
+  const source = await readFile(
+    join(repositoryRoot, "overlays", "freekill", "src", "core", "packman_wasm.cpp"),
+    "utf8",
+  );
+  assert.match(source, /QFile::remove\(persistentDatabase\)/);
+  assert.match(source, /QFile::copy\("\.\/packages\/packages\.db", persistentDatabase\)/);
+  assert.match(source, /std::make_unique<Sqlite3>\(persistentDatabase/);
 });
 
 test("prepared sources migrate to split packages and merged Qt runtime exports", async () => {

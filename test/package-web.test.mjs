@@ -16,7 +16,7 @@ async function fixtureFile(root, path, contents) {
   await writeFile(target, contents);
 }
 
-test("web packaging marks media packs as deferred downloads", async () => {
+test("web packaging makes every package media pack a startup requirement", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "freekill-web-package-"));
   const build = join(temporary, "build");
   const packages = join(temporary, "packages");
@@ -46,7 +46,7 @@ test("web packaging marks media packs as deferred downloads", async () => {
     assert.equal(manifest.deferredPacks[0].revision, mediaManifest.packs[0].revision);
     const mediaAsset = manifest.assets.find((asset) => asset.url.endsWith(".fkp"));
     assert.ok(mediaAsset);
-    assert.equal(mediaAsset.startup, false);
+    assert.equal(mediaAsset.startup, true);
     assert.ok(mediaAsset.downloadSize > 0);
     assert.equal(
       manifest.assets.find((asset) => asset.url === "/FreeKill.wasm").startup,
@@ -66,6 +66,17 @@ test("web packaging marks media packs as deferred downloads", async () => {
       await readFile(join(output, "FreeKill.wasm.br")),
     );
     assert.ok(await readFile(join(output, `${mediaAsset.url.slice(1)}.br`)));
+    assert.deepEqual(
+      await readFile(
+        join(
+          output,
+          ".freekill-assets",
+          mediaAsset.revision,
+          mediaAsset.url.slice(1),
+        ),
+      ),
+      await readFile(join(output, mediaAsset.url.slice(1))),
+    );
 
     const bootstrap = await readFile(join(output, "bootstrap.js"), "utf8");
     assert.match(bootstrap, /`\/\.freekill-assets\/\$\{asset\.revision\}\/\$\{path\}`/);
@@ -86,6 +97,10 @@ test("web packaging marks media packs as deferred downloads", async () => {
     assert.match(bootstrap, /new MutationObserver/);
     assert.match(bootstrap, /observer\.observe\(screen, \{ childList: true, subtree: true \}\)/);
     assert.match(bootstrap, /fitQtCanvasesToWindows\(\);\s*document\.body\.dataset\.state/s);
+    assert.match(bootstrap, /const requiredAssets = manifest\.assets/);
+    assert.match(bootstrap, /function mountRequiredMedia\(runtime, context\)/);
+    assert.match(bootstrap, /const dependency = "freekill-required-media"/);
+    assert.doesNotMatch(bootstrap, /downloadDeferredMedia/);
 
     const index = await readFile(join(output, "index.html"), "utf8");
     assert.doesNotMatch(index, /<script src="(?:qtloader|FreeKill)/);
