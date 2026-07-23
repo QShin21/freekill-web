@@ -173,9 +173,11 @@ test("the browser supplies Qt 5 graphical-effect compatibility via Qt 6 effects"
   const moduleDefinition = await readFile(join(compatibilityRoot, "qmldir"), "utf8");
   const effectFiles = [
     "ColorOverlay.qml",
+    "Colorize.qml",
     "DropShadow.qml",
     "FastBlur.qml",
     "Glow.qml",
+    "LinearGradient.qml",
     "OpacityMask.qml",
   ];
   assert.match(moduleDefinition, /module Qt5Compat\.GraphicalEffects/);
@@ -194,6 +196,10 @@ test("the browser opens a deployment-configured username and password login", as
     join(repositoryRoot, "overlays", "freekill", "src", "web", "web_platform.cpp"),
     "utf8",
   );
+  const sourceUpdater = await readFile(
+    join(repositoryRoot, "scripts", "update-prepared-source.mjs"),
+    "utf8",
+  );
   const config = JSON.parse(await readFile(join(repositoryRoot, "web", "config.json"), "utf8"));
 
   assert.equal(config.serverAddress, "123.57.220.25");
@@ -205,7 +211,16 @@ test("the browser opens a deployment-configured username and password login", as
   assert.match(login, /Backend\.joinServer\(configuredAddress, configuredPort\)/);
   assert.match(login, /placeholderText: qsTr\("Username"\)/);
   assert.match(login, /placeholderText: qsTr\("Password"\)/);
+  assert.match(login, /function sendDanmu\(msg\)/);
+  assert.match(login, /function addToChat\(pid, raw, msg\)/);
   assert.doesNotMatch(login, /Server Address|Join Server|PackageManage/);
+  assert.match(sourceUpdater, /browserLocalCustomPageIcons/);
+  assert.match(sourceUpdater, /status\/avatar-default-symbolic\.svg/);
+  assert.match(sourceUpdater, /devices\/auth-smartcard-symbolic\.svg/);
+  assert.match(sourceUpdater, /property var pendingRoomCommand: null/);
+  assert.match(sourceUpdater, /onLoaded:[\s\S]*Qt\.callLater/);
+  assert.match(sourceUpdater, /pendingRoomCommand = Command\.BackToRoom/);
+  assert.match(sourceUpdater, /pendingRoomCommand = Command\.RestartGame/);
 });
 
 test("prepared sources migrate to split packages and merged Qt runtime exports", async () => {

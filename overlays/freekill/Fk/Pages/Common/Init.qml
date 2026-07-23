@@ -125,6 +125,17 @@ W.PageBase {
     Config.saveConf();
   }
 
+  // RootPage routes server notices and chat to whichever page is currently
+  // visible.  A notice may arrive after authentication but before Lobby has
+  // replaced this page, so keep the same small interface as Lobby/RoomPage.
+  function sendDanmu(msg) {
+    App.showToast(msg, 5000);
+  }
+
+  function addToChat(pid, raw, msg) {
+    App.showToast(msg, 5000);
+  }
+
   Component.onCompleted: {
     addCallback(Command.EnterLobby, enterLobby);
     loadDeploymentConfig();

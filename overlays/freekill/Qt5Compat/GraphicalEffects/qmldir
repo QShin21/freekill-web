@@ -1,7 +1,9 @@
 module Qt5Compat.GraphicalEffects
 ColorOverlay 1.0 ColorOverlay.qml
+Colorize 1.0 Colorize.qml
 DropShadow 1.0 DropShadow.qml
 FastBlur 1.0 FastBlur.qml
 Glow 1.0 Glow.qml
+LinearGradient 1.0 LinearGradient.qml
 OpacityMask 1.0 OpacityMask.qml
 RectangularGlow 1.0 RectangularGlow.qml

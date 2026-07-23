@@ -302,6 +302,91 @@ dofile "ltk/init.lua"
 UsingNewCore = true
 Fk:loadPackages()`;
 
+const previousBrowserLocalCustomPageIcons = `    // Browsers reject the legacy plain-HTTP icon host as mixed content. Keep
+    // package Lua byte-identical to the server and localize only the browser
+    // presentation assembled by this top-level QML runtime.
+    for (const group of customPagesSpecs) {
+      for (const page of group.pages) {
+        if (page.name === "Generals Overview") {
+          page.iconUrl = Cpp.path + "/image/symbolic/status/avatar-default-symbolic.svg";
+        } else if (page.name === "Cards Overview") {
+          page.iconUrl = Cpp.path + "/image/symbolic/devices/auth-smartcard-symbolic.svg";
+        } else if (page.name === "Ban List") {
+          page.iconUrl = Cpp.path + "/image/symbolic/mimetypes/x-office-document-symbolic.svg";
+        } else if (page.iconUrl?.startsWith("http://")) {
+          page.iconUrl = Cpp.path + "/image/symbolic/categories/applications-games-symbolic.svg";
+        }
+      }
+    }
+
+`;
+
+const browserLocalCustomPageIcons = `    // Browsers reject the legacy plain-HTTP icon host as mixed content. Keep
+    // package Lua byte-identical to the server and copy its page description
+    // into a browser-local presentation model with bundled icons.
+    function browserCustomPage(page) {
+      let iconUrl = page.iconUrl;
+      if (page.name === "Generals Overview") {
+        iconUrl = Cpp.path + "/image/symbolic/status/avatar-default-symbolic.svg";
+      } else if (page.name === "Cards Overview") {
+        iconUrl = Cpp.path + "/image/symbolic/devices/auth-smartcard-symbolic.svg";
+      } else if (page.name === "Ban List") {
+        iconUrl = Cpp.path + "/image/symbolic/mimetypes/x-office-document-symbolic.svg";
+      } else if (iconUrl?.startsWith("http://")) {
+        iconUrl = Cpp.path + "/image/symbolic/categories/applications-games-symbolic.svg";
+      }
+      return {
+        name: page.name,
+        iconUrl,
+        popup: page.popup ?? false,
+        qml: page.qml,
+      };
+    }
+
+`;
+
+const webRoomTransitionState = `  // QML Loader instantiation is asynchronous in WebAssembly. Defer room
+  // lifecycle commands until the new WaitingRoom has registered its callbacks.
+  property var pendingRoomCommand: null
+
+`;
+
+const webRoomLoaderReady = `    onLoaded: {
+      if (root.pendingRoomCommand !== null) {
+        const command = root.pendingRoomCommand;
+        root.pendingRoomCommand = null;
+        Qt.callLater(() => Mediator.notify(root, command));
+      }
+    }
+
+`;
+
+async function updatePreparedQml(relativePath, replacements, label) {
+  const path = join(options.freeKill, ...relativePath.split("/"));
+  let before;
+  try {
+    before = (await readFile(path, "utf8")).replaceAll("\r\n", "\n");
+  } catch (error) {
+    // Small migration fixtures need not contain every runtime page.
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
+  let after = before;
+  for (const [legacy, replacement, optional = false] of replacements) {
+    if (after.includes(replacement)) continue;
+    const count = after.split(legacy).length - 1;
+    if (count === 0 && optional) continue;
+    if (count !== 1) {
+      throw new Error(`Expected one ${label} anchor in ${path}, found ${count}`);
+    }
+    after = after.replace(legacy, replacement);
+  }
+  if (after !== before) {
+    await writeFile(path, after);
+    console.log(`Localized browser-only assets in ${relativePath}.`);
+  }
+}
+
 const options = argumentsFrom(process.argv.slice(2));
 const cmakePath = join(options.freeKill, "src", "CMakeLists.txt");
 const before = (await readFile(cmakePath, "utf8")).replaceAll("\r\n", "\n");
@@ -475,3 +560,62 @@ for (const rootPagePath of rootPagePaths) {
     console.log(`Updated prepared FreeKill initial page loading: ${rootPagePath}`);
   }
 }
+
+await updatePreparedQml(
+  "Fk/Pages/Lobby/Lobby.qml",
+  [
+    [previousBrowserLocalCustomPageIcons, browserLocalCustomPageIcons, true],
+    [
+      "    for (const v of customPagesSpecs) {\n",
+      browserLocalCustomPageIcons + "    for (const v of customPagesSpecs) {\n",
+    ],
+    ["        pages: v.pages,\n", "        pages: v.pages.map(browserCustomPage),\n"],
+  ],
+  "custom page icon",
+);
+await updatePreparedQml(
+  "Fk/Pages/Common/RoomPage.qml",
+  [
+    [
+      "  Loader {\n    id: gameLoader\n",
+      webRoomTransitionState + "  Loader {\n    id: gameLoader\n",
+    ],
+    [
+      "    clip: true\n\n    Behavior on x",
+      "    clip: true\n\n" + webRoomLoaderReady + "    Behavior on x",
+    ],
+    [
+      "  function resetRoomPage() {\n    Lua.resetClientLua();\n    gameLoader.sourceComponent",
+      "  function resetRoomPage() {\n    Lua.resetClientLua();\n    pendingRoomCommand = Command.BackToRoom;\n    gameLoader.sourceComponent",
+    ],
+    [
+      "  function resetRoomPage() {\n    Lua.resetClientLua();\n    pendingRoomCommand = Command.BackToRoom;\n    gameLoader.sourceComponent = Qt.createComponent(\"Fk.Pages.Common\", \"WaitingRoom\");\n    log.clear();\n    chat.clear();\n    Mediator.notify(this, Command.BackToRoom);\n  }",
+      "  function resetRoomPage() {\n    Lua.resetClientLua();\n    pendingRoomCommand = Command.BackToRoom;\n    gameLoader.sourceComponent = Qt.createComponent(\"Fk.Pages.Common\", \"WaitingRoom\");\n    log.clear();\n    chat.clear();\n  }",
+    ],
+    [
+      "  function continueGame() {\n    Lua.resetClientLua();\n    gameLoader.sourceComponent",
+      "  function continueGame() {\n    Lua.resetClientLua();\n    pendingRoomCommand = Command.RestartGame;\n    gameLoader.sourceComponent",
+    ],
+    [
+      "  function continueGame() {\n    Lua.resetClientLua();\n    pendingRoomCommand = Command.RestartGame;\n    gameLoader.sourceComponent = Qt.createComponent(\"Fk.Pages.Common\", \"WaitingRoom\");\n    log.clear();\n    chat.clear();\n    Mediator.notify(this, Command.RestartGame);\n  }",
+      "  function continueGame() {\n    Lua.resetClientLua();\n    pendingRoomCommand = Command.RestartGame;\n    gameLoader.sourceComponent = Qt.createComponent(\"Fk.Pages.Common\", \"WaitingRoom\");\n    log.clear();\n    chat.clear();\n  }",
+    ],
+    [
+      '"http://175.178.66.93/symbolic/lunarltk/jiang.png"',
+      'Cpp.path + "/image/symbolic/status/avatar-default-symbolic.svg"',
+    ],
+    [
+      '"http://175.178.66.93/symbolic/lunarltk/cards.svg"',
+      'Cpp.path + "/image/symbolic/devices/auth-smartcard-symbolic.svg"',
+    ],
+  ],
+  "room menu icon",
+);
+await updatePreparedQml(
+  "LunarLtk/Components/PhotoBase.qml",
+  [[
+    '"https://images.icon-icons.com/1526/PNG/512/dress_106586.png"',
+    'Cpp.path + "/image/symbolic/status/avatar-default-symbolic.svg"',
+  ]],
+  "skin icon",
+);
