@@ -206,30 +206,62 @@ function mediaStatus(manifest, state, pack = null, error = null) {
   window.dispatchEvent(new CustomEvent("freekill-media-status", { detail: status }));
 }
 
+const fittedQtCanvases = new WeakSet();
+
+function fitQtCanvas(canvas) {
+  if (fittedQtCanvases.has(canvas)) return;
+  fittedQtCanvases.add(canvas);
+  for (const property of ["width", "height"]) {
+    canvas.style.setProperty(property, "100%", "important");
+  }
+  for (const property of ["min-width", "min-height"]) {
+    canvas.style.setProperty(property, "0", "important");
+  }
+  for (const property of ["max-width", "max-height"]) {
+    canvas.style.setProperty(property, "100%", "important");
+  }
+  requestAnimationFrame(() => {
+    const bounds = canvas.getBoundingClientRect();
+    console.info(
+      `[FreeKill] Qt canvas backing ${canvas.width}x${canvas.height}, CSS ${bounds.width}x${bounds.height}, DPR ${window.devicePixelRatio}`,
+    );
+  });
+}
+
 function installQtCanvasFitStyle() {
   const shadowRoot = screen.querySelector("#qt-shadow-container")?.shadowRoot;
-  if (!shadowRoot) return false;
-  if (shadowRoot.querySelector("#freekill-canvas-fit")) return true;
-  const style = document.createElement("style");
-  style.id = "freekill-canvas-fit";
-  style.textContent = `
-    canvas.qt-window-content {
-      width: 100%;
-      height: 100%;
-      min-width: 0;
-      min-height: 0;
-      max-width: 100%;
-      max-height: 100%;
-    }
-  `;
-  shadowRoot.append(style);
-  return true;
+  if (!shadowRoot) return null;
+  if (!shadowRoot.querySelector("#freekill-canvas-fit")) {
+    const style = document.createElement("style");
+    style.id = "freekill-canvas-fit";
+    style.textContent = `
+      canvas.qt-window-content {
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        min-height: 0;
+        max-width: 100%;
+        max-height: 100%;
+      }
+    `;
+    shadowRoot.append(style);
+  }
+  shadowRoot.querySelectorAll("canvas.qt-window-content").forEach(fitQtCanvas);
+  return shadowRoot;
 }
 
 function fitQtCanvasesToWindows() {
-  if (installQtCanvasFitStyle()) return;
+  let shadowObserver = null;
+  const attachToShadowRoot = () => {
+    const shadowRoot = installQtCanvasFitStyle();
+    if (!shadowRoot || shadowObserver) return Boolean(shadowRoot);
+    shadowObserver = new MutationObserver(() => installQtCanvasFitStyle());
+    shadowObserver.observe(shadowRoot, { childList: true, subtree: true });
+    return true;
+  };
+  if (attachToShadowRoot()) return;
   const observer = new MutationObserver(() => {
-    if (installQtCanvasFitStyle()) observer.disconnect();
+    if (attachToShadowRoot()) observer.disconnect();
   });
   observer.observe(screen, { childList: true, subtree: true });
   setTimeout(() => observer.disconnect(), 10_000);
