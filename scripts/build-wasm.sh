@@ -8,6 +8,7 @@ deps_root="${build_root}/wasm-deps"
 free_kill_source="${source_root}/FreeKill"
 core_source="${source_root}/freekill-core"
 wasm_build="${build_root}/wasm"
+web_media_root="${build_root}/web-media"
 build_type="${BUILD_TYPE:-MinSizeRel}"
 
 free_kill_revision="37f8c1248d491f5fbc7a07f1bc53724191e44497"
@@ -60,6 +61,8 @@ if [[ ! -f "${free_kill_source}/freekill-web-build.json" ]]; then
     --free-kill "${free_kill_source}" \
     --core "${core_source}"
 fi
+node "${repo_root}/scripts/update-prepared-source.mjs" \
+  --free-kill "${free_kill_source}"
 
 if [[ -n "${EXTRA_PACKAGES_DIR:-}" ]]; then
   if [[ ! -d "${EXTRA_PACKAGES_DIR}" ]]; then
@@ -78,6 +81,10 @@ if [[ -n "${EXTRA_PACKAGES_DIR:-}" ]]; then
     done
   fi
 fi
+
+node "${repo_root}/scripts/prepare-web-media.mjs" \
+  --packages "${free_kill_source}/packages" \
+  --output "${web_media_root}"
 
 download() {
   local url="$1"
@@ -147,6 +154,7 @@ fi
   -G Ninja \
   -DCMAKE_BUILD_TYPE="${build_type}" \
   -DQT_HOST_PATH="${QT_HOST_PATH}" \
+  -DFK_WEB_PACKAGES_DIR="${web_media_root}/core-packages" \
   -DLUA_INCLUDE_DIR="${lua_prefix}/include" \
   -DLUA_LIBRARY="${lua_prefix}/lib/liblua.a" \
   -DLUA_LIBRARIES="${lua_prefix}/lib/liblua.a" \
@@ -159,7 +167,18 @@ fi
   -DOPENSSL_USE_STATIC_LIBS=TRUE
 
 cmake --build "${wasm_build}" --parallel "${BUILD_JOBS:-4}"
-BUILD_DIR="${wasm_build}" OUTPUT_DIR="${repo_root}/dist" \
+next_output="${repo_root}/dist.next"
+previous_output="${repo_root}/dist.previous"
+BUILD_DIR="${wasm_build}" OUTPUT_DIR="${next_output}" \
+  WEB_MEDIA_DIR="${web_media_root}/public" \
+  REUSE_OUTPUT_DIR="${repo_root}/dist" \
   node "${repo_root}/scripts/package-web.mjs"
+
+rm -rf "${previous_output}"
+if [[ -d "${repo_root}/dist" ]]; then
+  mv "${repo_root}/dist" "${previous_output}"
+fi
+mv "${next_output}" "${repo_root}/dist"
+rm -rf "${previous_output}"
 
 echo "FreeKill Web is ready in ${repo_root}/dist"

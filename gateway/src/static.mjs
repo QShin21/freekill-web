@@ -5,6 +5,7 @@ import { basename, extname, isAbsolute, relative, resolve } from "node:path";
 const CONTENT_TYPES = new Map([
   [".css", "text/css; charset=utf-8"],
   [".data", "application/octet-stream"],
+  [".fkp", "application/octet-stream"],
   [".gif", "image/gif"],
   [".html", "text/html; charset=utf-8"],
   [".ico", "image/x-icon"],
@@ -108,9 +109,14 @@ export function createStaticHandler(root) {
     }
 
     const name = basename(sourcePath);
+    const cacheControl = NO_STORE.has(name)
+      ? "no-store"
+      : /-[0-9a-f]{16}\.fkp$/i.test(name)
+        ? "public, max-age=31536000, immutable"
+        : "public, max-age=0, must-revalidate";
     const headers = {
       ...SECURITY_HEADERS,
-      "cache-control": NO_STORE.has(name) ? "no-store" : "public, max-age=0, must-revalidate",
+      "cache-control": cacheControl,
       "content-length": transmittedInformation.size,
       "content-type": CONTENT_TYPES.get(extname(sourcePath).toLowerCase()) || "application/octet-stream",
       "last-modified": originalInformation.mtime.toUTCString(),

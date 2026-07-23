@@ -1,0 +1,59 @@
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import test from "node:test";
+import { promisify } from "node:util";
+import { prepareWebMedia } from "../scripts/prepare-web-media.mjs";
+
+const exec = promisify(execFile);
+const repositoryRoot = resolve(import.meta.dirname, "..");
+
+async function fixtureFile(root, path, contents) {
+  const target = join(root, ...path.split("/"));
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, contents);
+}
+
+test("web packaging marks media packs as deferred downloads", async () => {
+  const temporary = await mkdtemp(join(tmpdir(), "freekill-web-package-"));
+  const build = join(temporary, "build");
+  const packages = join(temporary, "packages");
+  const media = join(temporary, "web-media");
+  const output = join(temporary, "dist");
+  try {
+    await mkdir(build);
+    await writeFile(join(build, "FreeKill.js"), "globalThis.FreeKill = true;");
+    await writeFile(join(build, "FreeKill.wasm"), Buffer.from([0, 97, 115, 109]));
+    await writeFile(join(build, "qtloader.js"), "globalThis.qtLoad = true;");
+    await fixtureFile(packages, "standard/lua/init.lua", "return true");
+    await fixtureFile(packages, "standard/audio/skill/a.ogg", "voice data");
+    const mediaManifest = await prepareWebMedia({ packages, output: media });
+
+    await exec(process.execPath, [join(repositoryRoot, "scripts", "package-web.mjs")], {
+      cwd: repositoryRoot,
+      env: {
+        ...process.env,
+        BUILD_DIR: build,
+        OUTPUT_DIR: output,
+        WEB_MEDIA_DIR: join(media, "public"),
+      },
+    });
+
+    const manifest = JSON.parse(await readFile(join(output, "asset-manifest.json"), "utf8"));
+    assert.equal(manifest.deferredPacks.length, 1);
+    assert.equal(manifest.deferredPacks[0].revision, mediaManifest.packs[0].revision);
+    const mediaAsset = manifest.assets.find((asset) => asset.url.endsWith(".fkp"));
+    assert.ok(mediaAsset);
+    assert.equal(mediaAsset.startup, false);
+    assert.ok(mediaAsset.downloadSize > 0);
+    assert.equal(
+      manifest.assets.find((asset) => asset.url === "/FreeKill.wasm").startup,
+      true,
+    );
+    assert.ok(await readFile(join(output, `${mediaAsset.url.slice(1)}.br`)));
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});

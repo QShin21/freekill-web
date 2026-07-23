@@ -118,6 +118,7 @@ test("static files include WebAssembly security and cache headers", async () => 
   await writeFile(join(root, "index.html"), index);
   await writeFile(join(root, "game.wasm"), wasm);
   await writeFile(join(root, "game.wasm.br"), brotliCompressSync(wasm));
+  await writeFile(join(root, "standard-0123456789abcdef.fkp"), wasm);
   const current = await fixture({ staticRoot: root });
   try {
     const page = await get(current.port, "/");
@@ -134,6 +135,11 @@ test("static files include WebAssembly security and cache headers", async () => 
     assert.equal(compressed.headers["content-encoding"], "br");
     assert.equal(compressed.headers.vary, "Accept-Encoding");
     assert.deepEqual(compressed.body, brotliCompressSync(wasm));
+
+    const mediaPack = await get(current.port, "/standard-0123456789abcdef.fkp");
+    assert.equal(mediaPack.status, 200);
+    assert.equal(mediaPack.headers["content-type"], "application/octet-stream");
+    assert.equal(mediaPack.headers["cache-control"], "public, max-age=31536000, immutable");
   } finally {
     await current.close();
     await rm(root, { recursive: true, force: true });

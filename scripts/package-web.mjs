@@ -16,6 +16,12 @@ import { brotliCompressSync, gzipSync, constants as zlibConstants } from "node:z
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const buildDirectory = resolve(process.env.BUILD_DIR || join(repositoryRoot, "build", "wasm"));
 const outputDirectory = resolve(process.env.OUTPUT_DIR || join(repositoryRoot, "dist"));
+const webMediaDirectory = process.env.WEB_MEDIA_DIR
+  ? resolve(process.env.WEB_MEDIA_DIR)
+  : null;
+const reuseDirectory = process.env.REUSE_OUTPUT_DIR
+  ? resolve(process.env.REUSE_OUTPUT_DIR)
+  : null;
 const webDirectory = join(repositoryRoot, "web");
 
 const requiredBuildFiles = ["FreeKill.js", "FreeKill.wasm", "qtloader.js"];
@@ -23,6 +29,7 @@ const optionalBuildFiles = ["FreeKill.data", "FreeKill.worker.js"];
 const shellFiles = [
   "index.html",
   "bootstrap.js",
+  "media-pack.js",
   "styles.css",
   "config.json",
   "manifest.webmanifest",
@@ -68,15 +75,36 @@ function digest(buffer) {
 }
 
 async function compress(path, contents) {
-  if (!new Set([".wasm", ".data", ".js", ".css", ".html", ".json", ".webmanifest"]).has(extname(path))) {
+  const extension = extname(path);
+  if (!new Set([".wasm", ".data", ".fkp", ".js", ".css", ".html", ".json", ".webmanifest"]).has(extension)) {
     return;
   }
+  // Media packs are already mostly OGG/WebP/PNG. A lower level is effectively
+  // the same download size and avoids spending minutes recompressing them.
+  const mediaPack = extension === ".fkp";
+  if (reuseDirectory && reuseDirectory !== outputDirectory) {
+    const previousPath = join(reuseDirectory, relative(outputDirectory, path));
+    if (
+      (await exists(previousPath)) &&
+      (await exists(`${previousPath}.gz`)) &&
+      (await exists(`${previousPath}.br`))
+    ) {
+      const previous = await readFile(previousPath);
+      if (previous.length === contents.length && digest(previous) === digest(contents)) {
+        await Promise.all([
+          cp(`${previousPath}.gz`, `${path}.gz`),
+          cp(`${previousPath}.br`, `${path}.br`),
+        ]);
+        return;
+      }
+    }
+  }
   await Promise.all([
-    writeFile(`${path}.gz`, gzipSync(contents, { level: 9 })),
+    writeFile(`${path}.gz`, gzipSync(contents, { level: mediaPack ? 6 : 9 })),
     writeFile(
       `${path}.br`,
       brotliCompressSync(contents, {
-        params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
+        params: { [zlibConstants.BROTLI_PARAM_QUALITY]: mediaPack ? 5 : 11 },
       }),
     ),
   ]);
@@ -91,6 +119,27 @@ await copyNamedFiles(buildDirectory, requiredBuildFiles, true);
 await copyNamedFiles(buildDirectory, optionalBuildFiles, false);
 await copyNamedFiles(webDirectory, shellFiles, true);
 
+let deferredPacks = [];
+if (webMediaDirectory) {
+  const mediaManifestPath = join(webMediaDirectory, "media-manifest.json");
+  if (!(await exists(mediaManifestPath))) {
+    throw new Error(`Missing deferred media manifest: ${mediaManifestPath}`);
+  }
+  const mediaManifest = JSON.parse(await readFile(mediaManifestPath, "utf8"));
+  if (mediaManifest.version !== 1 || !Array.isArray(mediaManifest.packs)) {
+    throw new Error(`Unsupported deferred media manifest: ${mediaManifestPath}`);
+  }
+  deferredPacks = mediaManifest.packs;
+  await cp(mediaManifestPath, join(outputDirectory, "media-manifest.json"));
+  if (deferredPacks.length > 0) {
+    await cp(join(webMediaDirectory, "media"), join(outputDirectory, "media"), {
+      recursive: true,
+    });
+  }
+}
+
+const deferredUrls = new Set(deferredPacks.map((pack) => pack.url));
+
 const candidates = (await listFiles(outputDirectory)).filter(
   (path) =>
     basename(path) !== "asset-manifest.json" &&
@@ -103,12 +152,15 @@ const assets = [];
 for (const path of candidates) {
   const contents = await readFile(path);
   const info = await stat(path);
+  await compress(path, contents);
+  const compressedPath = `${path}.br`;
   assets.push({
     url: publicPath(path),
     size: info.size,
+    downloadSize: (await exists(compressedPath)) ? (await stat(compressedPath)).size : info.size,
     revision: digest(contents).slice(0, 16),
+    startup: !deferredUrls.has(publicPath(path)),
   });
-  await compress(path, contents);
 }
 assets.sort((left, right) => left.url.localeCompare(right.url));
 
@@ -116,12 +168,20 @@ const version = digest(Buffer.from(JSON.stringify(assets))).slice(0, 16);
 const manifest = {
   cacheName: `freekill-web-${version}`,
   assets,
+  deferredPacks,
 };
 await writeFile(
   join(outputDirectory, "asset-manifest.json"),
   `${JSON.stringify(manifest, null, 2)}\n`,
 );
 
+const startupBytes = assets
+  .filter((asset) => asset.startup)
+  .reduce((sum, asset) => sum + asset.downloadSize, 0);
+const deferredBytes = assets
+  .filter((asset) => !asset.startup)
+  .reduce((sum, asset) => sum + asset.downloadSize, 0);
 console.log(
-  `Packaged ${assets.length} files (${assets.reduce((sum, asset) => sum + asset.size, 0)} bytes) in ${outputDirectory}`,
+  `Packaged ${assets.length} files (${startupBytes} startup bytes, ` +
+    `${deferredBytes} deferred bytes) in ${outputDirectory}`,
 );
