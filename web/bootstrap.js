@@ -58,9 +58,13 @@ function revisionKey(asset) {
 }
 
 function revisionedAssetUrl(asset) {
-  const url = new URL(asset.url, location.href);
-  url.searchParams.set("v", asset.revision);
-  return url.href;
+  if (asset.startup === false) return new URL(asset.url, location.href).href;
+  const path = asset.url.replace(/^\/+/, "");
+  return new URL(`/.freekill-assets/${asset.revision}/${path}`, location.href).href;
+}
+
+function cacheRequestUrl(asset) {
+  return asset.startup === false ? asset.url : revisionedAssetUrl(asset);
 }
 
 function manifestAsset(manifest, url) {
@@ -92,14 +96,14 @@ async function loadQtRuntime(manifest) {
 
 async function cacheAsset(cache, asset, response) {
   await Promise.all([
-    cache.put(asset.url, response),
+    cache.put(cacheRequestUrl(asset), response),
     cache.put(revisionKey(asset), new Response(asset.revision)),
   ]);
 }
 
 async function matchingResponse(cache, asset) {
   const [response, marker] = await Promise.all([
-    cache.match(asset.url),
+    cache.match(cacheRequestUrl(asset)),
     cache.match(revisionKey(asset)),
   ]);
   return response && marker ? response : null;
@@ -269,9 +273,17 @@ async function loadQtApplication(context) {
     throw new Error("Qt WebAssembly loader is missing");
   }
 
+  const runtimeAssets = new Map(context.manifest.assets.map((asset) => [asset.url, asset]));
+  const locateRuntimeFile = (filename) => {
+    const logicalPath = filename.startsWith("/") ? filename : `/${filename}`;
+    const asset = runtimeAssets.get(logicalPath);
+    return asset ? revisionedAssetUrl(asset) : filename;
+  };
+
   let runtimeModule;
   showStatus("正在启动 FreeKill……", "语音和大型动画将在进入游戏后于后台缓存。", null);
   await qtLoader({
+    locateFile: locateRuntimeFile,
     qt: {
       entryFunction,
       containerElements: [screen],

@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import {
   access,
   cp,
+  link,
   mkdir,
   readFile,
   readdir,
@@ -110,6 +111,16 @@ async function compress(path, contents) {
   ]);
 }
 
+async function linkOrCopy(source, destination) {
+  await mkdir(resolve(destination, ".."), { recursive: true });
+  try {
+    await link(source, destination);
+  } catch (error) {
+    if (!["EACCES", "ENOTSUP", "EPERM", "EXDEV"].includes(error?.code)) throw error;
+    await cp(source, destination);
+  }
+}
+
 if (outputDirectory === repositoryRoot || outputDirectory === resolve(outputDirectory, "..")) {
   throw new Error(`Unsafe OUTPUT_DIR: ${outputDirectory}`);
 }
@@ -163,6 +174,25 @@ for (const path of candidates) {
   });
 }
 assets.sort((left, right) => left.url.localeCompare(right.url));
+
+// CDN configurations often ignore query parameters when constructing their
+// cache key. Publish startup artifacts under revision-specific paths so two
+// releases can never be mixed even when different edge nodes retain old data.
+for (const asset of assets.filter((candidate) => candidate.startup !== false)) {
+  const source = join(outputDirectory, asset.url.replace(/^\/+/, ""));
+  const destination = join(
+    outputDirectory,
+    ".freekill-assets",
+    asset.revision,
+    asset.url.replace(/^\/+/, ""),
+  );
+  await linkOrCopy(source, destination);
+  for (const suffix of [".br", ".gz"]) {
+    if (await exists(`${source}${suffix}`)) {
+      await linkOrCopy(`${source}${suffix}`, `${destination}${suffix}`);
+    }
+  }
+}
 
 const version = digest(Buffer.from(JSON.stringify(assets))).slice(0, 16);
 const manifest = {

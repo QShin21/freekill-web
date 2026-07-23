@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { brotliCompressSync } from "node:zlib";
 import http from "node:http";
 import net from "node:net";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -119,6 +119,9 @@ test("static files include WebAssembly security and cache headers", async () => 
   await writeFile(join(root, "game.wasm"), wasm);
   await writeFile(join(root, "game.wasm.br"), brotliCompressSync(wasm));
   await writeFile(join(root, "standard-0123456789abcdef.fkp"), wasm);
+  const revisionDirectory = join(root, ".freekill-assets", "0123456789abcdef");
+  await mkdir(revisionDirectory, { recursive: true });
+  await writeFile(join(revisionDirectory, "game.wasm"), wasm);
   const current = await fixture({ staticRoot: root });
   try {
     const page = await get(current.port, "/");
@@ -140,6 +143,16 @@ test("static files include WebAssembly security and cache headers", async () => 
     assert.equal(compressed.headers["cache-control"], "public, max-age=2592000");
     assert.equal(compressed.headers.vary, "Accept-Encoding");
     assert.deepEqual(compressed.body, brotliCompressSync(wasm));
+
+    const revisioned = await get(
+      current.port,
+      "/.freekill-assets/0123456789abcdef/game.wasm",
+    );
+    assert.equal(revisioned.status, 200);
+    assert.equal(
+      revisioned.headers["cache-control"],
+      "public, max-age=2592000, immutable",
+    );
 
     const mediaPack = await get(current.port, "/standard-0123456789abcdef.fkp");
     assert.equal(mediaPack.status, 200);

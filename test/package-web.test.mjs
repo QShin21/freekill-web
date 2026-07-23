@@ -52,10 +52,23 @@ test("web packaging marks media packs as deferred downloads", async () => {
       manifest.assets.find((asset) => asset.url === "/FreeKill.wasm").startup,
       true,
     );
+    const wasmAsset = manifest.assets.find((asset) => asset.url === "/FreeKill.wasm");
+    assert.deepEqual(
+      await readFile(
+        join(output, ".freekill-assets", wasmAsset.revision, "FreeKill.wasm"),
+      ),
+      await readFile(join(output, "FreeKill.wasm")),
+    );
+    assert.deepEqual(
+      await readFile(
+        join(output, ".freekill-assets", wasmAsset.revision, "FreeKill.wasm.br"),
+      ),
+      await readFile(join(output, "FreeKill.wasm.br")),
+    );
     assert.ok(await readFile(join(output, `${mediaAsset.url.slice(1)}.br`)));
 
     const bootstrap = await readFile(join(output, "bootstrap.js"), "utf8");
-    assert.match(bootstrap, /url\.searchParams\.set\("v", asset\.revision\)/);
+    assert.match(bootstrap, /`\/\.freekill-assets\/\$\{asset\.revision\}\/\$\{path\}`/);
     assert.match(bootstrap, /asset\.startup === false \? "" : "v2\/"/);
     assert.match(
       bootstrap,
@@ -63,6 +76,7 @@ test("web packaging marks media packs as deferred downloads", async () => {
     );
     assert.match(bootstrap, /loadScriptAsset\(manifest, "\/qtloader\.js"\)/);
     assert.match(bootstrap, /loadScriptAsset\(manifest, "\/FreeKill\.js"\)/);
+    assert.match(bootstrap, /locateFile: locateRuntimeFile/);
 
     const index = await readFile(join(output, "index.html"), "utf8");
     assert.doesNotMatch(index, /<script src="(?:qtloader|FreeKill)/);

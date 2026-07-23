@@ -65,3 +65,13 @@ test("the reverse proxies allow the Qt WebAssembly binding runtime", async () =>
     );
   }
 });
+
+test("the container serves content-addressed assets with one-month immutable caching", async () => {
+  const config = await readFile(
+    resolve(repositoryRoot, "deployment", "nginx.conf"),
+    "utf8",
+  );
+
+  assert.match(config, /location \^~ \/\.freekill-assets\//);
+  assert.match(config, /Cache-Control "public, max-age=2592000, immutable"/);
+});

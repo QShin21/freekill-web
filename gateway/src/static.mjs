@@ -75,6 +75,7 @@ export function createStaticHandler(root) {
 
   return async function serveStatic(request, response) {
     if (request.method !== "GET" && request.method !== "HEAD") return false;
+    const requestUrl = new URL(request.url, "http://static.invalid");
 
     let sourcePath;
     try {
@@ -109,13 +110,15 @@ export function createStaticHandler(root) {
     }
 
     const name = basename(sourcePath);
-    const cacheControl = NO_STORE.has(name)
-      ? "no-store"
-      : /-[0-9a-f]{16}\.fkp$/i.test(name)
-        ? "public, max-age=31536000, immutable"
-        : /\.(?:wasm|data)$/i.test(name)
-          ? "public, max-age=2592000"
-        : "public, max-age=0, must-revalidate";
+    const cacheControl = requestUrl.pathname.startsWith("/.freekill-assets/")
+      ? "public, max-age=2592000, immutable"
+      : NO_STORE.has(name)
+        ? "no-store"
+        : /-[0-9a-f]{16}\.fkp$/i.test(name)
+          ? "public, max-age=31536000, immutable"
+          : /\.(?:wasm|data)$/i.test(name)
+            ? "public, max-age=2592000"
+          : "public, max-age=0, must-revalidate";
     const headers = {
       ...SECURITY_HEADERS,
       "cache-control": cacheControl,
