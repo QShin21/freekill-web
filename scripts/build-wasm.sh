@@ -61,8 +61,6 @@ if [[ ! -f "${free_kill_source}/freekill-web-build.json" ]]; then
     --free-kill "${free_kill_source}" \
     --core "${core_source}"
 fi
-node "${repo_root}/scripts/update-prepared-source.mjs" \
-  --free-kill "${free_kill_source}"
 
 if [[ -n "${EXTRA_PACKAGES_DIR:-}" ]]; then
   if [[ ! -d "${EXTRA_PACKAGES_DIR}" ]]; then
@@ -81,6 +79,12 @@ if [[ -n "${EXTRA_PACKAGES_DIR:-}" ]]; then
     done
   fi
 fi
+
+# Extra package snapshots may replace freekill-core after the initial upstream
+# preparation. Apply the web overlays afterwards so both the root QML module
+# and the package copy used for FK_WEB_PACKAGES_DIR contain the same fixes.
+node "${repo_root}/scripts/update-prepared-source.mjs" \
+  --free-kill "${free_kill_source}"
 
 node "${repo_root}/scripts/prepare-web-media.mjs" \
   --packages "${free_kill_source}/packages" \

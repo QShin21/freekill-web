@@ -103,6 +103,24 @@ test("media path policy and pack validation reject unsafe input", () => {
   );
 });
 
+test("the Wasm build reapplies web overlays after extra packages", async () => {
+  const buildScript = await readFile(
+    join(repositoryRoot, "scripts", "build-wasm.sh"),
+    "utf8",
+  );
+  const extraPackages = buildScript.indexOf('if [[ -n "${EXTRA_PACKAGES_DIR:-}" ]]');
+  const updatePreparedSource = buildScript.indexOf(
+    'node "${repo_root}/scripts/update-prepared-source.mjs"',
+  );
+  const prepareWebMedia = buildScript.indexOf(
+    'node "${repo_root}/scripts/prepare-web-media.mjs"',
+  );
+
+  assert.ok(extraPackages >= 0);
+  assert.ok(updatePreparedSource > extraPackages);
+  assert.ok(prepareWebMedia > updatePreparedSource);
+});
+
 test("prepared sources migrate to split packages and merged Qt runtime exports", async () => {
   const temporary = await mkdtemp(join(tmpdir(), "freekill-web-source-"));
   const sourceDirectory = join(temporary, "FreeKill");
