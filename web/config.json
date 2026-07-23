@@ -1,4 +1,4 @@
 {
-  "webSocketUrl": null,
+  "webSocketUrl": "wss://ws.zijing.yejiaxin.online/ws",
   "webSocketPath": "/ws"
 }
