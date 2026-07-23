@@ -112,6 +112,9 @@ test("the Wasm build reapplies web overlays after extra packages", async () => {
   const updatePreparedSource = buildScript.indexOf(
     'node "${repo_root}/scripts/update-prepared-source.mjs"',
   );
+  const reapplySourceOverlays = buildScript.indexOf(
+    'cp -R "${repo_root}/overlays/freekill/src/." "${free_kill_source}/src/"',
+  );
   const prepareWebMedia = buildScript.indexOf(
     'node "${repo_root}/scripts/prepare-web-media.mjs"',
   );
@@ -121,6 +124,8 @@ test("the Wasm build reapplies web overlays after extra packages", async () => {
     buildScript,
     /rm -rf "\$\{free_kill_source:\?\}\/packages"[\s\S]*tar --exclude='\.git'/,
   );
+  assert.ok(reapplySourceOverlays > extraPackages);
+  assert.ok(updatePreparedSource > reapplySourceOverlays);
   assert.ok(updatePreparedSource > extraPackages);
   assert.ok(prepareWebMedia > updatePreparedSource);
 });

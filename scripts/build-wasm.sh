@@ -88,6 +88,7 @@ fi
 # Extra package snapshots may replace freekill-core after the initial upstream
 # preparation. Apply the web overlays afterwards so both the root QML module
 # and the package copy used for FK_WEB_PACKAGES_DIR contain the same fixes.
+cp -R "${repo_root}/overlays/freekill/src/." "${free_kill_source}/src/"
 node "${repo_root}/scripts/update-prepared-source.mjs" \
   --free-kill "${free_kill_source}"
 
