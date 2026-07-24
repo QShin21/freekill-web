@@ -221,6 +221,11 @@ test("the browser opens a deployment-configured username and password login", as
   assert.match(sourceUpdater, /onLoaded:[\s\S]*Qt\.callLater/);
   assert.match(sourceUpdater, /pendingRoomCommand = Command\.BackToRoom/);
   assert.match(sourceUpdater, /pendingRoomCommand = Command\.RestartGame/);
+  assert.match(sourceUpdater, /adaptive room detail popup/);
+  assert.match(sourceUpdater, /Layout\.minimumWidth: 0/);
+  assert.match(sourceUpdater, /browser skill button label/);
+  assert.match(sourceUpdater, /z: 10/);
+  assert.match(sourceUpdater, /root\.dataModel\.isActive \|\| root\.dataModel\.isPrelight/);
 });
 
 test("prepared sources migrate to split packages and merged Qt runtime exports", async () => {

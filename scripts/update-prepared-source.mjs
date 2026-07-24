@@ -361,6 +361,121 @@ const webRoomLoaderReady = `    onLoaded: {
 
 `;
 
+const legacySkillButtonLabel = `  Text {
+    id: skillTxt
+    anchors.centerIn: parent
+    topPadding: 5
+    font.family: Config.li2Name
+    font.pixelSize: Math.max(26 - text.length, 18)
+    visible: false
+    font.bold: true
+    text: root.dataModel.name
+  }
+
+  Glow {
+    source: skillTxt
+    anchors.fill: skillTxt
+    color: "black"
+    spread: 0.3
+    radius: 5
+  }
+
+  LinearGradient  {
+    anchors.fill: skillTxt
+    source: skillTxt
+    gradient: Gradient {
+      GradientStop {
+        position: 0
+        color: root.dataModel.nullified ? "#CCC8C4" : "#FEF7C2"
+      }
+
+      GradientStop {
+        position: 0.8
+        color: root.dataModel.nullified ? "#A09691" : "#D2AD4A"
+      }
+
+      GradientStop {
+        position: 1
+        color: root.dataModel.nullified ? "#787173" : "#BE9878"
+      }
+    }
+  }
+`;
+
+const webSkillButtonLabel = `  Text {
+    id: skillTxt
+    anchors.centerIn: parent
+    topPadding: 5
+    z: 10
+    font.family: Config.li2Name
+    font.pixelSize: Math.max(26 - text.length, 18)
+    font.bold: true
+    text: root.dataModel.name
+    color: root.dataModel.nullified ||
+      ((root.dataModel.isActive || root.dataModel.isPrelight) &&
+       !root.dataModel.enabled) ? "#A09691" : "#FEF7C2"
+    style: Text.Outline
+    styleColor: "#2E200F"
+  }
+`;
+
+const previousWebSkillButtonLabel = webSkillButtonLabel.replace(
+  `((root.dataModel.isActive || root.dataModel.isPrelight) &&
+       !root.dataModel.enabled)`,
+  `(root.dataModel.isActive && !root.dataModel.enabled)`,
+);
+
+const legacySkillCountEffects = `    Glow {
+      source: count
+      anchors.fill: count
+      color: "black"
+      spread: 0.3
+      radius: 5
+    }
+
+    LinearGradient {
+      anchors.fill: count
+      z: 3
+      source: count
+      gradient: Gradient {
+        GradientStop {
+          position: 0
+          color: root.dataModel.nullified ? "#CCC8C4" : "#FEF7C2"
+        }
+
+        GradientStop {
+          position: 0.8
+          color: root.dataModel.nullified ? "#A09691" : "#D2AD4A"
+        }
+
+        GradientStop {
+          position: 1
+          color: root.dataModel.nullified ? "#787173" : "#BE9878"
+        }
+      }
+    }
+`;
+
+const webSkillCountStyle = `    // Avoid a WebAssembly mask texture for this tiny label. A direct outlined
+    // glyph stays sharp and cannot cover the button with a rectangular mask.
+    Binding {
+      target: count
+      property: "color"
+      value: root.dataModel.nullified ||
+        ((root.dataModel.isActive || root.dataModel.isPrelight) &&
+         !root.dataModel.enabled) ? "#A09691" : "#FEF7C2"
+    }
+    Binding { target: count; property: "style"; value: Text.Outline }
+    Binding { target: count; property: "styleColor"; value: "#2E200F" }
+    Binding { target: count; property: "z"; value: 10 }
+`;
+
+const previousWebSkillCountStyle = webSkillCountStyle.replace(
+  `((root.dataModel.isActive || root.dataModel.isPrelight) &&
+         !root.dataModel.enabled)`,
+  `(root.dataModel.isActive && !root.dataModel.enabled)`,
+);
+
 async function updatePreparedQml(relativePath, replacements, label) {
   const path = join(options.freeKill, ...relativePath.split("/"));
   let before;
@@ -618,4 +733,79 @@ await updatePreparedQml(
     'Cpp.path + "/image/symbolic/status/avatar-default-symbolic.svg"',
   ]],
   "skin icon",
+);
+const adaptiveRoomDetailPopup = [
+  [
+    `  W.PopupItem {
+    id: infoPopup
+    width: Config.winWidth * 0.60
+    height: Config.winHeight * 0.8
+`,
+    `  W.PopupItem {
+    id: infoPopup
+    // Use the room viewport rather than a fixed desktop-oriented fraction.
+    // This applies to player, general, card and pile detail pages alike.
+    readonly property real viewportMargin:
+      Math.max(12, Math.min(parent.width, parent.height) * 0.025)
+    width: Math.max(0, parent.width - viewportMargin * 2)
+    height: Math.max(0, parent.height - viewportMargin * 2)
+`,
+    true,
+  ],
+];
+await updatePreparedQml(
+  "LunarLtk/Pages/RoomBase.qml",
+  adaptiveRoomDetailPopup,
+  "adaptive room detail popup",
+);
+await updatePreparedQml(
+  "LunarLtk/Pages/Room.qml",
+  adaptiveRoomDetailPopup,
+  "adaptive room detail popup",
+);
+await updatePreparedQml(
+  "LunarLtk/Pages/InfoPopups/PlayerDetail.qml",
+  [
+    [
+      "  contentHeight: details.height\n  ScrollBar.vertical: ScrollBar {}\n",
+      "  contentHeight: details.height\n  flickableDirection: Flickable.VerticalFlick\n  boundsBehavior: Flickable.StopAtBounds\n  ScrollBar.vertical: ScrollBar {}\n",
+      true,
+    ],
+    [
+      "    RowLayout {\n      spacing: 20\n      ColumnLayout {",
+      "    RowLayout {\n      Layout.fillWidth: true\n      spacing: 20\n      ColumnLayout {",
+      true,
+    ],
+    [
+      "  RowLayout {\n    spacing: 20\n    ColumnLayout {",
+      "  RowLayout {\n    Layout.fillWidth: true\n    spacing: 20\n    ColumnLayout {",
+      true,
+    ],
+    [
+      "        Layout.fillWidth: true\n        Layout.alignment: Qt.AlignTop\n        Layout.topMargin: 10\n",
+      "        Layout.fillWidth: true\n        Layout.minimumWidth: 0\n        Layout.alignment: Qt.AlignTop\n        Layout.topMargin: 10\n",
+      true,
+    ],
+    [
+      "      Layout.fillWidth: true\n      Layout.alignment: Qt.AlignTop\n      Layout.topMargin: 10\n",
+      "      Layout.fillWidth: true\n      Layout.minimumWidth: 0\n      Layout.alignment: Qt.AlignTop\n      Layout.topMargin: 10\n",
+      true,
+    ],
+    [
+      "        id: detailSwipeView\n        Layout.fillWidth: true\n        Layout.fillHeight: true\n",
+      "        id: detailSwipeView\n        Layout.fillWidth: true\n        Layout.fillHeight: true\n        Layout.minimumWidth: 0\n",
+      true,
+    ],
+  ],
+  "responsive player detail",
+);
+await updatePreparedQml(
+  "LunarLtk/Components/SkillButton.qml",
+  [
+    [previousWebSkillButtonLabel, webSkillButtonLabel, true],
+    [legacySkillButtonLabel, webSkillButtonLabel],
+    [previousWebSkillCountStyle, webSkillCountStyle, true],
+    [legacySkillCountEffects, webSkillCountStyle],
+  ],
+  "browser skill button label",
 );
