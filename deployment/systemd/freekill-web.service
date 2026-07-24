@@ -1,0 +1,18 @@
+[Unit]
+Description=FreeKill Web static server and WebSocket gateway
+Wants=network-online.target freekill.service
+After=network-online.target freekill.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/freekill-web/gateway
+EnvironmentFile=%h/.config/freekill-web.env
+ExecStart=/usr/bin/node %h/freekill-web/gateway/src/index.mjs
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

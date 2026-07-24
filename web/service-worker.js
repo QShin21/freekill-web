@@ -1,5 +1,14 @@
 const CACHE_PREFIX = "freekill-web-";
-const NETWORK_FIRST = new Set(["/", "/index.html", "/config.json", "/asset-manifest.json"]);
+const NETWORK_FIRST = new Set([
+  "/",
+  "/index.html",
+  "/config.json",
+  "/asset-manifest.json",
+  "/bootstrap.js",
+  "/media-pack.js",
+  "/styles.css",
+  "/manifest.webmanifest",
+]);
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -8,7 +17,7 @@ self.addEventListener("activate", (event) => {
 });
 async function networkFirst(request) {
   try {
-    const response = await fetch(request);
+    const response = await fetch(request, { cache: "no-store" });
     return response;
   } catch (error) {
     const cached = await caches.match(request);

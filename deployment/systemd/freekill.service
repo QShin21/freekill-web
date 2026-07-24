@@ -1,0 +1,17 @@
+[Unit]
+Description=FreeKill game server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/freekill-asio-static
+# freekill-asio exits cleanly when its interactive CLI receives EOF. Keep an
+# idle pipe open so systemd can supervise the real server without screen/tmux.
+ExecStart=/bin/bash -c 'exec %h/freekill-asio-static/freekill-asio -p 9527 < <(exec tail -f /dev/null)'
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+[Install]
+WantedBy=default.target

@@ -11,11 +11,26 @@ EM_JS(char *, duplicateWebSocketUrl, (), {
   const config = globalThis.FREEKILL_WEB_CONFIG || {};
   const scheme = location.protocol === "https:" ? "wss:" : "ws:";
   const path = config.webSocketPath || "/ws";
-  const value = config.webSocketUrl || `${scheme}//${location.host}${path}`;
+  const value = config.webSocketUrl || scheme + "//" + location.host + path;
   const size = lengthBytesUTF8(value) + 1;
   const result = _malloc(size);
   stringToUTF8(value, result, size);
   return result;
+});
+
+EM_JS(char *, duplicateServerAddress, (), {
+  const config = globalThis.FREEKILL_WEB_CONFIG || {};
+  const value = String(config.serverAddress || location.hostname);
+  const size = lengthBytesUTF8(value) + 1;
+  const result = _malloc(size);
+  stringToUTF8(value, result, size);
+  return result;
+});
+
+EM_JS(int, configuredServerPort, (), {
+  const config = globalThis.FREEKILL_WEB_CONFIG || {};
+  const value = Number(config.serverPort);
+  return Number.isInteger(value) && value > 0 && value <= 65535 ? value : 9527;
 });
 
 EM_JS(char *, duplicateDeviceUuid, (), {
@@ -24,12 +39,16 @@ EM_JS(char *, duplicateDeviceUuid, (), {
   try {
     value = localStorage.getItem(key) || "";
     if (!value) {
-      value = globalThis.crypto?.randomUUID?.() ||
-        `web-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+      const browserCrypto = globalThis.crypto;
+      value = browserCrypto && typeof browserCrypto.randomUUID === "function" ?
+        browserCrypto.randomUUID() :
+        "web-" + Date.now().toString(16) + "-" +
+          Math.random().toString(16).slice(2);
       localStorage.setItem(key, value);
     }
   } catch (_) {
-    value = `web-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+    value = "web-" + Date.now().toString(16) + "-" +
+      Math.random().toString(16).slice(2);
   }
   const size = lengthBytesUTF8(value) + 1;
   const result = _malloc(size);
@@ -49,6 +68,10 @@ namespace WebPlatform {
 
 QString webSocketUrl() { return takeString(duplicateWebSocketUrl()); }
 
+QString serverAddress() { return takeString(duplicateServerAddress()); }
+
+int serverPort() { return configuredServerPort(); }
+
 QString deviceUuid() { return takeString(duplicateDeviceUuid()); }
 
 QString persistentPath(const QString &relativePath) {
@@ -60,7 +83,7 @@ QString persistentPath(const QString &relativePath) {
 void syncPersistentFileSystem() {
   EM_ASM({
     if (typeof FS !== "undefined") {
-      FS.syncfs(false, (error) => {
+      FS.syncfs(false, function(error) {
         if (error) console.warn("Unable to persist FreeKill data", error);
       });
     }

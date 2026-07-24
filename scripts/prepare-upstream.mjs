@@ -106,6 +106,12 @@ async function patchRootCMake(freeKill) {
       "if (EMSCRIPTEN)\n  find_package(OpenSSL REQUIRED)\n  find_package(Lua REQUIRED)\n  find_package(SQLite3 REQUIRED)\nelse()\n  find_package(OpenSSL)\n  find_package(Lua)\n  find_package(SQLite3)\nendif()\n",
       "Wasm native dependencies",
     );
+    output = replaceOnce(
+      output,
+      "include_directories(include/libgit2)\n",
+      "include_directories(include/libgit2)\n\nif (EMSCRIPTEN)\n  include_directories(${LUA_INCLUDE_DIR})\nendif()\n",
+      "Wasm Lua headers",
+    );
     return output;
   });
 }
@@ -126,6 +132,12 @@ async function patchSourceCMake(freeKill) {
     );
     output = replaceOnce(
       output,
+      '  list(APPEND freekill_SRCS\n    "core/packman_wasm.cpp"\n',
+      '  list(APPEND freekill_SRCS\n    "core/packman.h"\n    "core/packman_wasm.cpp"\n',
+      "Wasm PackMan moc header",
+    );
+    output = replaceOnce(
+      output,
       "set(QT_LIB Qt6::Network)\n",
       "set(QT_LIB Qt6::Network)\nif (EMSCRIPTEN)\n  list(APPEND QT_LIB Qt6::WebSockets)\nendif()\n",
       "Qt WebSockets link library",
@@ -139,7 +151,7 @@ async function patchSourceCMake(freeKill) {
     output = replaceOnce(
       output,
       "target_link_libraries(FreeKill PRIVATE\n  libFreeKill\n)\n",
-      "target_link_libraries(FreeKill PRIVATE\n  libFreeKill\n)\n\nif (EMSCRIPTEN)\n  set_target_properties(FreeKill PROPERTIES QT_WASM_MAXIMUM_MEMORY 2147483648)\n  target_link_options(FreeKill PRIVATE\n    \"SHELL:-s ALLOW_MEMORY_GROWTH=1\"\n    \"SHELL:-s FORCE_FILESYSTEM=1\"\n    \"SHELL:-s EXPORTED_RUNTIME_METHODS=FS,IDBFS,addRunDependency,removeRunDependency\"\n  )\n  foreach(resource_dir IN ITEMS audio fonts image lua Fk client packages)\n    target_link_options(FreeKill PRIVATE\n      \"SHELL:--preload-file \\\"${PROJECT_SOURCE_DIR}/${resource_dir}@/${resource_dir}\\\"\")\n  endforeach()\n  foreach(resource_file IN ITEMS waiting_tips.txt)\n    target_link_options(FreeKill PRIVATE\n      \"SHELL:--preload-file \\\"${PROJECT_SOURCE_DIR}/${resource_file}@/${resource_file}\\\"\")\n  endforeach()\nendif()\n",
+      "target_link_libraries(FreeKill PRIVATE\n  libFreeKill\n)\n\nif (EMSCRIPTEN)\n  set_target_properties(FreeKill PROPERTIES\n    QT_WASM_MAXIMUM_MEMORY 2147483648\n    QT_WASM_EXTRA_EXPORTED_METHODS \"addRunDependency,removeRunDependency\"\n  )\n  target_link_options(FreeKill PRIVATE\n    \"SHELL:-s ALLOW_MEMORY_GROWTH=1\"\n    \"SHELL:-s FORCE_FILESYSTEM=1\"\n    \"SHELL:-lidbfs.js\"\n  )\n  foreach(resource_dir IN ITEMS audio fonts image lua Fk client)\n    target_link_options(FreeKill PRIVATE\n      \"SHELL:--preload-file \\\"${PROJECT_SOURCE_DIR}/${resource_dir}@/${resource_dir}\\\"\")\n  endforeach()\n  set(FK_WEB_PACKAGES_DIR \"${PROJECT_SOURCE_DIR}/packages\" CACHE PATH\n    \"Package directory embedded in the WebAssembly client\")\n  target_link_options(FreeKill PRIVATE\n    \"SHELL:--preload-file \\\"${FK_WEB_PACKAGES_DIR}@/packages\\\"\")\n  foreach(resource_file IN ITEMS waiting_tips.txt)\n    target_link_options(FreeKill PRIVATE\n      \"SHELL:--preload-file \\\"${PROJECT_SOURCE_DIR}/${resource_file}@/${resource_file}\\\"\")\n  endforeach()\nendif()\n",
       "Wasm preload resources",
     );
     return output;
@@ -184,6 +196,37 @@ async function patchFreekillEntry(freeKill) {
       "  QString system;\n#if defined(Q_OS_ANDROID)",
       "  QString system;\n#if defined(Q_OS_WASM)\n  system = QStringLiteral(\"Web\");\n#elif defined(Q_OS_ANDROID)",
       "Web OS name",
+    );
+    output = replaceOnce(
+      output,
+      `#define SHOW_SPLASH_MSG(msg)                                                   \\
+  splash.showMessage(msg, Qt::AlignHCenter | Qt::AlignBottom);`,
+      `#ifdef Q_OS_WASM
+#define SHOW_SPLASH_MSG(msg) do { } while (false)
+#else
+#define SHOW_SPLASH_MSG(msg)                                                   \\
+  splash.showMessage(msg, Qt::AlignHCenter | Qt::AlignBottom);
+#endif`,
+      "browser native splash messages",
+    );
+    output = replaceOnce(
+      output,
+      `  QSplashScreen splash(QPixmap("image/splash.jpg"));
+  splash.show();`,
+      `#ifndef Q_OS_WASM
+  QSplashScreen splash(QPixmap("image/splash.jpg"));
+  splash.show();
+#endif`,
+      "browser native splash window",
+    );
+    output = replaceOnce(
+      output,
+      "  splash.close();\n  int ret = app->exec();",
+      `#ifndef Q_OS_WASM
+  splash.close();
+#endif
+  int ret = app->exec();`,
+      "browser native splash close",
     );
     return output;
   });
@@ -232,6 +275,12 @@ async function patchUtilities(freeKill) {
       "#include \"core/util.h\"\n",
       "#include \"core/util.h\"\n#ifdef Q_OS_WASM\n#include \"web/web_platform.h\"\n#endif\n",
       "web utility include",
+    );
+    output = replaceOnce(
+      output,
+      "#include <git2.h>\n",
+      "#ifndef Q_OS_WASM\n#include <git2.h>\n#endif\n",
+      "browser libgit2 exclusion",
     );
     output = replaceOnce(
       output,
@@ -341,6 +390,48 @@ async function patchPch(freeKill) {
   );
 }
 
+async function patchClientSocket(freeKill) {
+  await transform(join(freeKill, "src", "network", "client_socket.cpp"), (source) =>
+    replaceAllChecked(
+      source,
+      "*error = QCborError::",
+      "error->c = QCborError::",
+      3,
+      "Qt 6.8 QCborError assignments",
+    ),
+  );
+}
+
+async function patchSwigForWeb(freeKill) {
+  await transform(join(freeKill, "src", "swig", "naturalvar.i"), (source) => {
+    let output = replaceOnce(
+      source,
+      '#include "server/gamelogic/roomthread.h"\n',
+      "",
+      "browser server type include",
+    );
+    output = replaceOnce(
+      output,
+      "    } else if (typeId == QMetaType::fromType<RoomThread *>().id()) {\n" +
+        "      SWIG_NewPointerObj(L, v.value<RoomThread *>(), SWIGTYPE_p_RoomThread, 0);\n" +
+        "    } else if (typeId == QMetaType::fromType<Server *>().id()) {\n" +
+        "      SWIG_NewPointerObj(L, v.value<Server *>(), SWIGTYPE_p_Server, 0);\n",
+      "",
+      "browser server QVariant bindings",
+    );
+    return output;
+  });
+
+  await transform(join(freeKill, "src", "swig", "qt.i"), (source) =>
+    replaceOnce(
+      source,
+      "%template(SPlayerList) QList<ServerPlayer *>;\n",
+      "",
+      "browser server player list binding",
+    ),
+  );
+}
+
 async function main() {
   const options = argumentsFrom(process.argv.slice(2));
   await assertHead(options.freeKill, expectedFreeKill, "FreeKill");
@@ -360,6 +451,8 @@ async function main() {
   await patchUtilities(options.freeKill);
   await patchQmlBackend(options.freeKill);
   await patchPch(options.freeKill);
+  await patchClientSocket(options.freeKill);
+  await patchSwigForWeb(options.freeKill);
 
   await writeFile(
     join(options.freeKill, "freekill-web-build.json"),

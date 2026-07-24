@@ -8,6 +8,8 @@ deps_root="${build_root}/wasm-deps"
 free_kill_source="${source_root}/FreeKill"
 core_source="${source_root}/freekill-core"
 wasm_build="${build_root}/wasm"
+web_media_root="${build_root}/web-media"
+build_type="${BUILD_TYPE:-MinSizeRel}"
 
 free_kill_revision="37f8c1248d491f5fbc7a07f1bc53724191e44497"
 core_revision="c19441690711b73ffb427b3e7974ec7e92e33bea"
@@ -19,7 +21,7 @@ openssl_version="3.3.4"
 : "${QT_WASM_ROOT:?Set QT_WASM_ROOT to the Qt 6.8 multi-threaded WebAssembly kit}"
 : "${QT_HOST_PATH:?Set QT_HOST_PATH to the matching Qt 6.8 desktop host kit}"
 
-for command in git node cmake ninja emcc emar emran emmake make perl curl tar unzip; do
+for command in git node cmake ninja emcc emar emranlib emmake make perl curl tar unzip; do
   if ! command -v "${command}" >/dev/null 2>&1; then
     echo "Missing required command: ${command}" >&2
     exit 1
@@ -65,8 +67,45 @@ if [[ -n "${EXTRA_PACKAGES_DIR:-}" ]]; then
     echo "EXTRA_PACKAGES_DIR does not exist: ${EXTRA_PACKAGES_DIR}" >&2
     exit 1
   fi
-  cp -R "${EXTRA_PACKAGES_DIR}/." "${free_kill_source}/packages/"
+  # The game server's package directory is authoritative. Replace the prepared
+  # package tree instead of overlaying it so removed/renamed extensions cannot
+  # survive from an older web build and alter the client package summary.
+  rm -rf "${free_kill_source:?}/packages"
+  mkdir -p "${free_kill_source}/packages"
+  (cd "${EXTRA_PACKAGES_DIR}" && tar --exclude='.git' -cf - .) | \
+    (cd "${free_kill_source}/packages" && tar -xf -)
+  if [[ -d "${EXTRA_PACKAGES_DIR}/freekill-core" ]]; then
+    # The browser deliberately boots from the top-level runtime so its direct
+    # login UI can differ from the byte-identical package used for MD5 checks.
+    # Copy the core runtime's QML and Lua dependencies alongside that entrypoint.
+    for core_directory in Fk LunarLtk lua ltk; do
+      if [[ -d "${EXTRA_PACKAGES_DIR}/freekill-core/${core_directory}" ]]; then
+        rm -rf "${free_kill_source:?}/${core_directory}"
+        cp -R "${EXTRA_PACKAGES_DIR}/freekill-core/${core_directory}" \
+          "${free_kill_source}/${core_directory}"
+      fi
+    done
+  fi
 fi
+
+# Extra package snapshots may replace freekill-core after the initial upstream
+# preparation. Reapply browser-only C++ and runtime QML overlays afterwards.
+# Never apply QML runtime fixes to the package snapshot: calcFileMD5() must see
+# byte-identical server scripts even when the browser UI needs different code.
+cp -R "${repo_root}/overlays/freekill/src/." "${free_kill_source}/src/"
+for runtime_overlay in Fk Qt5Compat; do
+  if [[ -d "${repo_root}/overlays/freekill/${runtime_overlay}" ]]; then
+    mkdir -p "${free_kill_source}/${runtime_overlay}"
+    cp -R "${repo_root}/overlays/freekill/${runtime_overlay}/." \
+      "${free_kill_source}/${runtime_overlay}/"
+  fi
+done
+node "${repo_root}/scripts/update-prepared-source.mjs" \
+  --free-kill "${free_kill_source}"
+
+node "${repo_root}/scripts/prepare-web-media.mjs" \
+  --packages "${free_kill_source}/packages" \
+  --output "${web_media_root}"
 
 download() {
   local url="$1"
@@ -82,10 +121,12 @@ if [[ ! -f "${lua_prefix}/lib/liblua.a" ]]; then
   download "https://www.lua.org/ftp/lua-${lua_version}.tar.gz" "${lua_archive}"
   tar -xf "${lua_archive}" -C "${deps_root}/src"
   emmake make -C "${deps_root}/src/lua-${lua_version}/src" \
-    CC=emcc AR="emar rcu" RANLIB=emran \
-    MYCFLAGS="-O3 -fPIC" generic
+    CC=emcc AR="emar rcu" RANLIB=emranlib \
+    MYCFLAGS="-O3 -fPIC -pthread" generic
   mkdir -p "${lua_prefix}/include" "${lua_prefix}/lib"
-  cp "${deps_root}/src/lua-${lua_version}/src/"*.h "${lua_prefix}/include/"
+  cp "${deps_root}/src/lua-${lua_version}/src/"*.h \
+    "${deps_root}/src/lua-${lua_version}/src/"*.hpp \
+    "${lua_prefix}/include/"
   cp "${deps_root}/src/lua-${lua_version}/src/liblua.a" "${lua_prefix}/lib/"
 fi
 
@@ -98,7 +139,7 @@ if [[ ! -f "${sqlite_prefix}/lib/libsqlite3.a" ]]; then
   unzip -q -o "${sqlite_archive}" -d "${deps_root}/src"
   sqlite_source="${deps_root}/src/sqlite-amalgamation-${sqlite_archive_version}"
   mkdir -p "${sqlite_prefix}/include" "${sqlite_prefix}/lib"
-  emcc -O3 -fPIC -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION \
+  emcc -O3 -fPIC -pthread -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION \
     -c "${sqlite_source}/sqlite3.c" -o "${sqlite_source}/sqlite3.o"
   emar rcs "${sqlite_prefix}/lib/libsqlite3.a" "${sqlite_source}/sqlite3.o"
   cp "${sqlite_source}/sqlite3.h" "${sqlite_source}/sqlite3ext.h" \
@@ -113,29 +154,52 @@ if [[ ! -f "${openssl_prefix}/lib/libcrypto.a" ]]; then
     "${openssl_archive}"
   tar -xf "${openssl_archive}" -C "${deps_root}/src"
   pushd "${deps_root}/src/openssl-${openssl_version}" >/dev/null
-  CC=emcc AR=emar RANLIB=emran perl ./Configure linux-generic32 \
-    no-shared no-asm no-tests no-threads no-dso no-ui-console \
+  CC=emcc AR=emar RANLIB=emranlib CFLAGS="-pthread" \
+    perl ./Configure linux-generic32 \
+    no-shared no-asm no-tests no-threads no-dso no-ui-console no-afalgeng \
     --prefix="${openssl_prefix}" --openssldir="${openssl_prefix}/ssl" --libdir=lib
   emmake make -j"${BUILD_JOBS:-4}" build_libs
-  emmake make install_sw
+  emmake make install_dev
   popd >/dev/null
+fi
+
+emscripten_libc="$(emcc --print-file-name=libc-mt.a)"
+if [[ ! -f "${emscripten_libc}" ]]; then
+  echo "Could not locate Emscripten libc.a: ${emscripten_libc}" >&2
+  exit 1
 fi
 
 "${QT_WASM_ROOT}/bin/qt-cmake" \
   -S "${free_kill_source}" \
   -B "${wasm_build}" \
   -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_BUILD_TYPE="${build_type}" \
   -DQT_HOST_PATH="${QT_HOST_PATH}" \
+  -DFK_WEB_PACKAGES_DIR="${web_media_root}/core-packages" \
   -DLUA_INCLUDE_DIR="${lua_prefix}/include" \
   -DLUA_LIBRARY="${lua_prefix}/lib/liblua.a" \
+  -DLUA_LIBRARIES="${lua_prefix}/lib/liblua.a" \
+  -DLUA_MATH_LIBRARY="${emscripten_libc}" \
   -DSQLite3_INCLUDE_DIR="${sqlite_prefix}/include" \
   -DSQLite3_LIBRARY="${sqlite_prefix}/lib/libsqlite3.a" \
   -DOPENSSL_ROOT_DIR="${openssl_prefix}" \
+  -DOPENSSL_INCLUDE_DIR="${openssl_prefix}/include" \
+  -DOPENSSL_CRYPTO_LIBRARY="${openssl_prefix}/lib/libcrypto.a" \
   -DOPENSSL_USE_STATIC_LIBS=TRUE
 
 cmake --build "${wasm_build}" --parallel "${BUILD_JOBS:-4}"
-BUILD_DIR="${wasm_build}" OUTPUT_DIR="${repo_root}/dist" \
+next_output="${repo_root}/dist.next"
+previous_output="${repo_root}/dist.previous"
+BUILD_DIR="${wasm_build}" OUTPUT_DIR="${next_output}" \
+  WEB_MEDIA_DIR="${web_media_root}/public" \
+  REUSE_OUTPUT_DIR="${repo_root}/dist" \
   node "${repo_root}/scripts/package-web.mjs"
+
+rm -rf "${previous_output}"
+if [[ -d "${repo_root}/dist" ]]; then
+  mv "${repo_root}/dist" "${previous_output}"
+fi
+mv "${next_output}" "${repo_root}/dist"
+rm -rf "${previous_output}"
 
 echo "FreeKill Web is ready in ${repo_root}/dist"

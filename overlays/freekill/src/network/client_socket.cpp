@@ -281,18 +281,18 @@ QList<QCborArray> ClientSocket::readCborArrsFromBuffer(QCborError *error) {
       break;
     }
     if (!item.isArray()) {
-      *error = QCborError::IllegalType;
+      *error = QCborError{QCborError::IllegalType};
       break;
     }
     result << item.toArray();
     const auto consumed = reader.currentOffset();
     if (consumed <= 0) {
-      *error = QCborError::UnknownError;
+      *error = QCborError{QCborError::UnknownError};
       break;
     }
     cursor += consumed;
     remaining -= consumed;
-    *error = QCborError::NoError;
+    *error = QCborError{QCborError::NoError};
   }
 
   cborBuffer = QByteArray(cursor, remaining);

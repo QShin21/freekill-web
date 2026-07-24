@@ -27,7 +27,9 @@ flowchart LR
 - 固定上游 TCP 目标的安全网关，支持 Origin 白名单、连接上限、心跳、背压、超时和健康检查。
 - WebAssembly 专用客户端构建：移除本地服务端、UDP 局域网发现和运行时 `libgit2`，保留 Qt Quick/Lua 游戏逻辑。
 - `freekill-core` 在构建时导出为普通文件（不把 `.git` 打进浏览器），并与服务端使用同一提交。
-- 首次启动按资源字节数显示缓存进度；后续从 Cache Storage 加载。配置、客户端 SQLite 数据库和录像写入 IDBFS/IndexedDB。
+- 首次启动只阻塞缓存规则、脚本、常用图片和客户端程序；角色语音与大型动画按扩展包在游戏启动后后台下载。后续均从 Cache Storage 加载。
+- 缓存按文件内容哈希复用；部署新版本时，未变化的 Wasm、数据文件和媒体包会从旧缓存迁移，不重复下载。
+- 配置、客户端 SQLite 数据库和录像写入 IDBFS/IndexedDB。
 - Nginx 同源 WSS 反向代理、Wasm MIME、预压缩、安全响应头与多线程 Wasm 所需的 COOP/COEP。
 - Docker Compose 部署，直接指向已经运行的 `freekill-asio:9527`。
 
@@ -57,6 +59,7 @@ npm start
 | `PORT` | `9528` | 网关 HTTP/WebSocket 端口 |
 | `FREEKILL_HOST` | `127.0.0.1` | 现有游戏服务端地址 |
 | `FREEKILL_PORT` | `9527` | 现有游戏服务端 TCP 端口 |
+| `STATIC_ROOT` | 空 | 可选；设置后网关会同时提供该目录中的网页/Wasm 静态文件 |
 | `WS_PATH` | `/ws` | WebSocket 路径 |
 | `ALLOWED_ORIGINS` | 空（开发时允许全部） | 逗号分隔的网页 Origin；生产环境必须设置 |
 | `MAX_CONNECTIONS` | `2000` | 网页连接上限 |
@@ -85,8 +88,9 @@ export QT_WASM_ROOT=/opt/Qt/6.8.3/wasm_multithread
 1. 拉取并校验固定的 FreeKill 与 freekill-core 提交；
 2. 应用 `overlays/freekill` 中的 Web 适配；
 3. 为 Wasm 编译 Lua、SQLite 和 OpenSSL 静态库；
-4. 构建 FreeKill；
-5. 生成 `dist/`、资源版本清单以及 gzip/Brotli 预压缩文件。
+4. 把扩展包规则和常用图片写入首屏 `.data`，把语音、大型动画拆成按包独立的 `.fkp`；
+5. 构建 FreeKill；
+6. 生成 `dist/`、资源版本清单以及 gzip/Brotli 预压缩文件，并在成功后原子替换旧发布目录。
 
 若服务端启用了额外扩展包，先把与服务端完全相同的、已导出的扩展包目录放在一个目录下，然后设置：
 
@@ -123,9 +127,27 @@ docker compose up --build
 
 Linux 上如果 `freekill-asio` 也在 Docker 网络中，可把 `FREEKILL_HOST` 改为它的 Compose 服务名。生产环境应使用 HTTPS；HTTPS 页面只能连接 WSS，仓库中的同源 Nginx 配置会自动完成升级代理。
 
+## 不使用 Docker 的服务器部署
+
+网关也可以直接提供 `dist/`，适合已有 FreeKill 服务且暂时不能修改系统 Nginx 的服务器：
+
+```bash
+cd gateway
+npm ci --omit=dev
+HOST=0.0.0.0 PORT=9580 \
+STATIC_ROOT="$HOME/freekill-web/dist" \
+FREEKILL_HOST=127.0.0.1 FREEKILL_PORT=9527 \
+npm start
+```
+
+`deployment/systemd/` 提供游戏服务和网页网关的用户级 systemd 单元；
+`deployment/nginx-freekill.conf` 可在具备 root 权限后把现有 HTTPS 域名切换到网页网关。
+
 ## 缓存行为
 
-`scripts/package-web.mjs` 为每个构建生成含 SHA-256 修订号和文件大小的 `asset-manifest.json`。首次访问时，启动器先缓存 Qt loader、JavaScript、Wasm 和 `.data` 游戏资源，再启动游戏。新版部署会产生新的 Cache Storage 名称，缓存完成后删除旧版本。
+`scripts/package-web.mjs` 为每个构建生成含 SHA-256 修订号、原始大小和实际压缩下载大小的 `asset-manifest.json`。首次访问时，启动器先缓存 Qt loader、JavaScript、Wasm 和核心 `.data`，随后启动游戏；角色语音、`image/anim` 动画和 `mobile_effect` 大图按扩展包在后台顺序缓存并挂载。
+
+每个缓存条目有独立的内容修订标记。新版部署仍使用新的 Cache Storage 名称，但会先从旧缓存复制哈希相同的文件和媒体包，只下载真正发生变化的内容，迁移完成后再删除旧缓存。内容寻址的 `.fkp` 使用一年 immutable HTTP 缓存。
 
 客户端配置、SQLite 数据库和录像使用 `/persistent` IDBFS 挂载点，写入后同步到 IndexedDB。清除站点数据会同时清除这些本地数据。
 
@@ -144,7 +166,7 @@ compose.yaml             网页与网关编排
 
 - 网页构建与一个具体服务端的核心/扩展包集合绑定；服务端换包后要重新构建网页资源。
 - Qt Multimedia 在 Qt for WebAssembly 中仍有平台差异，浏览器可能要求用户交互后才允许播放声音。
-- 首次资源包较大，这是完整 Qt Quick 客户端和素材进入浏览器文件系统的代价；Nginx 会优先发送预压缩文件，后续访问走本地缓存。
+- 首次仍需下载 Qt Quick、Wasm、规则和常用图片；语音及大型动画不会阻塞进入游戏，但会在后台占用带宽直到缓存完成。Nginx 会优先发送预压缩文件，后续访问走本地缓存。
 - 网关不是通用 TCP 代理，目标地址由服务端环境变量固定，浏览器不能指定任意内网目标。
 
 项目继续遵循上游 GPL-3.0-or-later 许可证要求；部署修改版时应同时提供对应源代码。

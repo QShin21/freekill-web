@@ -1,6 +1,7 @@
 import http from "node:http";
 import net from "node:net";
 import { WebSocket, WebSocketServer } from "ws";
+import { createStaticHandler } from "./static.mjs";
 
 const JSON_HEADERS = {
   "cache-control": "no-store",
@@ -58,16 +59,28 @@ function safeClose(webSocket, code, reason) {
 export function createGateway(options, dependencies = {}) {
   const logger = dependencies.logger || defaultLogger();
   const connect = dependencies.connect || ((connectOptions) => net.createConnection(connectOptions));
+  const serveStatic = dependencies.serveStatic || createStaticHandler(options.staticRoot);
   const server = http.createServer((request, response) => {
-    const path = requestPath(request);
-    if (request.method === "GET" && (path === "/healthz" || path === "/readyz")) {
-      response.writeHead(200, JSON_HEADERS);
-      response.end(JSON.stringify({ ok: true }));
-      return;
-    }
+    void (async () => {
+      const path = requestPath(request);
+      if (request.method === "GET" && (path === "/healthz" || path === "/readyz")) {
+        response.writeHead(200, JSON_HEADERS);
+        response.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (await serveStatic(request, response)) return;
 
-    response.writeHead(404, JSON_HEADERS);
-    response.end(JSON.stringify({ error: "not found" }));
+      response.writeHead(404, JSON_HEADERS);
+      response.end(JSON.stringify({ error: "not found" }));
+    })().catch((error) => {
+      logger.error("http_request_error", { message: error.message });
+      if (response.headersSent) {
+        response.destroy(error);
+        return;
+      }
+      response.writeHead(500, JSON_HEADERS);
+      response.end(JSON.stringify({ error: "internal server error" }));
+    });
   });
 
   const webSocketServer = new WebSocketServer({

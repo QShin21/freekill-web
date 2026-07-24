@@ -24,6 +24,7 @@ export function configFromEnv(env = process.env) {
     port: integer("PORT", env.PORT, 9528, 0, 65535),
     upstreamHost: env.FREEKILL_HOST || "127.0.0.1",
     upstreamPort: integer("FREEKILL_PORT", env.FREEKILL_PORT, 9527, 1, 65535),
+    staticRoot: env.STATIC_ROOT?.trim() || "",
     webSocketPath,
     allowedOrigins: origins(env.ALLOWED_ORIGINS),
     connectTimeoutMs: integer(

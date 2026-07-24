@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { brotliCompressSync } from "node:zlib";
 import http from "node:http";
 import net from "node:net";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { WebSocket } from "ws";
 import { createGateway } from "../src/gateway.mjs";
@@ -72,6 +76,23 @@ function nextMessage(webSocket) {
   });
 }
 
+function get(port, path, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const request = http.get({ host: "127.0.0.1", port, path, headers }, (response) => {
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () =>
+        resolve({
+          body: Buffer.concat(chunks),
+          headers: response.headers,
+          status: response.statusCode,
+        }),
+      );
+    });
+    request.on("error", reject);
+  });
+}
+
 test("health endpoint reports ready", async () => {
   const current = await fixture();
   try {
@@ -87,6 +108,76 @@ test("health endpoint reports ready", async () => {
     assert.deepEqual(JSON.parse(body.data), { ok: true });
   } finally {
     await current.close();
+  }
+});
+
+test("static files include WebAssembly security and cache headers", async () => {
+  const root = await mkdtemp(join(tmpdir(), "freekill-web-static-"));
+  const index = Buffer.from("<!doctype html><title>FreeKill</title>");
+  const wasm = Buffer.from([0x00, 0x61, 0x73, 0x6d]);
+  await writeFile(join(root, "index.html"), index);
+  await writeFile(join(root, "game.wasm"), wasm);
+  await writeFile(join(root, "game.wasm.br"), brotliCompressSync(wasm));
+  await writeFile(join(root, "standard-0123456789abcdef.fkp"), wasm);
+  const revisionDirectory = join(root, ".freekill-assets", "0123456789abcdef");
+  await mkdir(revisionDirectory, { recursive: true });
+  await writeFile(join(revisionDirectory, "game.wasm"), wasm);
+  const current = await fixture({ staticRoot: root });
+  try {
+    const page = await get(current.port, "/");
+    assert.equal(page.status, 200);
+    assert.deepEqual(page.body, index);
+    assert.equal(page.headers["cache-control"], "no-store");
+    assert.equal(page.headers["cross-origin-opener-policy"], "same-origin");
+    assert.equal(page.headers["cross-origin-embedder-policy"], "require-corp");
+    assert.match(
+      page.headers["content-security-policy"],
+      /script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'/,
+    );
+    assert.match(
+      page.headers["content-security-policy"],
+      /style-src 'self' 'unsafe-inline'/,
+    );
+    assert.match(page.headers["content-security-policy"], /worker-src 'self' blob:/);
+
+    const compressed = await get(current.port, "/game.wasm", { "accept-encoding": "br, gzip" });
+    assert.equal(compressed.status, 200);
+    assert.equal(compressed.headers["content-type"], "application/wasm");
+    assert.equal(compressed.headers["content-encoding"], "br");
+    assert.equal(compressed.headers["cache-control"], "public, max-age=2592000");
+    assert.equal(compressed.headers.vary, "Accept-Encoding");
+    assert.deepEqual(compressed.body, brotliCompressSync(wasm));
+
+    const revisioned = await get(
+      current.port,
+      "/.freekill-assets/0123456789abcdef/game.wasm",
+    );
+    assert.equal(revisioned.status, 200);
+    assert.equal(
+      revisioned.headers["cache-control"],
+      "public, max-age=2592000, immutable",
+    );
+
+    const mediaPack = await get(current.port, "/standard-0123456789abcdef.fkp");
+    assert.equal(mediaPack.status, 200);
+    assert.equal(mediaPack.headers["content-type"], "application/octet-stream");
+    assert.equal(mediaPack.headers["cache-control"], "public, max-age=31536000, immutable");
+  } finally {
+    await current.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("static serving rejects encoded path traversal", async () => {
+  const root = await mkdtemp(join(tmpdir(), "freekill-web-static-"));
+  await writeFile(join(root, "index.html"), "safe");
+  const current = await fixture({ staticRoot: root });
+  try {
+    const response = await get(current.port, "/%2e%2e%2foutside.txt");
+    assert.equal(response.status, 404);
+  } finally {
+    await current.close();
+    await rm(root, { recursive: true, force: true });
   }
 });
 
