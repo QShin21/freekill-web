@@ -226,6 +226,11 @@ test("the browser opens a deployment-configured username and password login", as
   assert.match(sourceUpdater, /browser skill button label/);
   assert.match(sourceUpdater, /z: 10/);
   assert.match(sourceUpdater, /root\.dataModel\.isActive \|\| root\.dataModel\.isPrelight/);
+  assert.match(sourceUpdater, /Q_INVOKABLE void stopAllSounds/);
+  assert.match(sourceUpdater, /activeWebAudioPlayers/);
+  assert.match(sourceUpdater, /Backend\.controlReplayer\("shutdown"\)[\s\S]*Backend\.stopAllSounds\(\)/);
+  assert.match(sourceUpdater, /playbackState == MediaPlayer\.StoppedState && !roomScene\.stoppingAudio/);
+  assert.match(sourceUpdater, /Component\.onDestruction: stopRoomAudio\(\)/);
 });
 
 test("prepared sources migrate to split packages and merged Qt runtime exports", async () => {

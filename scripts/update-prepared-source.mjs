@@ -264,6 +264,34 @@ int QmlBackend::configuredServerPort() const {
 
 `;
 
+const stopAllSoundsHeaderMethod = "  Q_INVOKABLE void stopAllSounds();\n";
+const webAudioPlayerRegistry = `#ifdef Q_OS_WASM
+namespace {
+QSet<QMediaPlayer *> activeWebAudioPlayers;
+}
+#endif
+
+`;
+const webAudioPlayerTracking = `  auto player = new QMediaPlayer;
+#ifdef Q_OS_WASM
+  activeWebAudioPlayers.insert(player);
+  connect(player, &QObject::destroyed, this, [player] {
+    activeWebAudioPlayers.remove(player);
+  });
+#endif
+`;
+const stopAllSoundsImplementation = `void QmlBackend::stopAllSounds() {
+#ifdef Q_OS_WASM
+  const auto players = activeWebAudioPlayers.values();
+  for (auto *player : players) {
+    if (player)
+      player->stop();
+  }
+#endif
+}
+
+`;
+
 const nativeSplashMacro = `#define SHOW_SPLASH_MSG(msg)                                                   \\
   splash.showMessage(msg, Qt::AlignHCenter | Qt::AlignBottom);`;
 
@@ -614,6 +642,18 @@ if (!qmlBackendHeaderAfter.includes("configuredServerAddress")) {
     anchor + configuredServerHeaderMethods,
   );
 }
+if (!qmlBackendHeaderAfter.includes("stopAllSounds")) {
+  const anchor = "  Q_INVOKABLE void playSound(const QString &name, int index = 0);\n";
+  const count = qmlBackendHeaderAfter.split(anchor).length - 1;
+  if (count === 1) {
+    qmlBackendHeaderAfter = qmlBackendHeaderAfter.replace(
+      anchor,
+      anchor + stopAllSoundsHeaderMethod,
+    );
+  } else if (count !== 0) {
+    throw new Error(`Expected at most one audio control header anchor in ${qmlBackendHeaderPath}`);
+  }
+}
 if (qmlBackendHeaderAfter !== qmlBackendHeaderBefore) {
   await writeFile(qmlBackendHeaderPath, qmlBackendHeaderAfter);
   console.log("Exposed the browser deployment server configuration to QML.");
@@ -632,6 +672,29 @@ if (!qmlBackendAfter.includes("QmlBackend::configuredServerAddress")) {
     anchor,
     configuredServerImplementations + anchor,
   );
+}
+if (qmlBackendAfter.includes("void QmlBackend::playSound") &&
+    !qmlBackendAfter.includes("activeWebAudioPlayers")) {
+  const includeAnchor = "#include <QMediaPlayer>\n";
+  const playSoundAnchor = "void QmlBackend::playSound(const QString &name, int index) {\n";
+  const playerAnchor = "  auto player = new QMediaPlayer;\n";
+  const stopAnchor = "void QmlBackend::copyToClipboard(const QString &s) {\n";
+  for (const [anchor, label] of [
+    [includeAnchor, "QMediaPlayer include"],
+    [playSoundAnchor, "playSound implementation"],
+    [playerAnchor, "audio player creation"],
+    [stopAnchor, "audio cleanup implementation"],
+  ]) {
+    const count = qmlBackendAfter.split(anchor).length - 1;
+    if (count !== 1) {
+      throw new Error(`Expected one ${label} anchor in ${qmlBackendPath}, found ${count}`);
+    }
+  }
+  qmlBackendAfter = qmlBackendAfter
+    .replace(includeAnchor, includeAnchor + "#include <QSet>\n")
+    .replace(playSoundAnchor, webAudioPlayerRegistry + playSoundAnchor)
+    .replace(playerAnchor, webAudioPlayerTracking)
+    .replace(stopAnchor, stopAllSoundsImplementation + stopAnchor);
 }
 if (qmlBackendAfter !== qmlBackendBefore) {
   await writeFile(qmlBackendPath, qmlBackendAfter);
@@ -723,8 +786,57 @@ await updatePreparedQml(
       '"http://175.178.66.93/symbolic/lunarltk/cards.svg"',
       'Cpp.path + "/image/symbolic/devices/auth-smartcard-symbolic.svg"',
     ],
+    [
+      `    if (Config.replaying) {
+      App.quitPage();
+      Backend.controlReplayer("shutdown");
+    } else if (Config.observing || !Lua.client.gameStarted) {`,
+      `    if (Config.replaying) {
+      // Stop the replay producer before clearing every room-owned audio source.
+      Backend.controlReplayer("shutdown");
+      gameLoader.item?.stopRoomAudio();
+      Backend.stopAllSounds();
+      App.quitPage();
+    } else if (Config.observing || !Lua.client.gameStarted) {`,
+    ],
   ],
   "room menu icon",
+);
+await updatePreparedQml(
+  "LunarLtk/Pages/RoomBase.qml",
+  [
+    [
+      "  property alias bigAnim: bigAnim\n",
+      "  property alias bigAnim: bigAnim\n  property bool stoppingAudio: false\n",
+    ],
+    [
+      `    onPlaybackStateChanged: {
+      if (playbackState == MediaPlayer.StoppedState)
+        play();
+    }`,
+      `    onPlaybackStateChanged: {
+      if (playbackState == MediaPlayer.StoppedState && !roomScene.stoppingAudio)
+        play();
+    }`,
+    ],
+    [
+      `  Component.onCompleted: {
+    dataModel.initialize();`,
+      `  function stopRoomAudio() {
+    if (stoppingAudio)
+      return;
+    stoppingAudio = true;
+    bgm.stop();
+    Backend.stopAllSounds();
+  }
+
+  Component.onDestruction: stopRoomAudio()
+
+  Component.onCompleted: {
+    dataModel.initialize();`,
+    ],
+  ],
+  "replay room audio cleanup",
 );
 await updatePreparedQml(
   "LunarLtk/Components/PhotoBase.qml",
